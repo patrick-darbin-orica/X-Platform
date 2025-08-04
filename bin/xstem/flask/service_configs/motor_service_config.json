@@ -1,0 +1,15 @@
+{
+    "name": "canbus",
+    "port": 6001,
+    "host": "100.124.157.128",
+    "log_level": "INFO",
+    "subscriptions": [
+        {
+            "uri": {
+                "path": "/motor_states",
+                "query": "service_name=canbus"
+            },
+            "every_n": 1
+        }
+    ]
+}

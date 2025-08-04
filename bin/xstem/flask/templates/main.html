@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orica XDipper</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body { display: flex; }
+        .section { flex: 1; padding: 10px; }
+        #plot { text-align: center; }
+        .plot {
+            display: inline-block;
+            margin: 10px;
+        }
+        .video-container { width: 300px; height: 200px; overflow: hidden; } /* Adjust size here */
+        img { width: 100%; height: auto; } /* Make images responsive */
+    </style>
+</head>
+<body>
+    <div class="section" id="plot">
+        <h2>XY Coordinate Plot</h2>
+        <div id="plot-container"></div>
+    </div>
+    <script>
+        function fetchAndUpdatePlot() {
+    fetch('/plot_data')
+    .then(response => response.json())
+    .then(data => {
+        const width = 500;
+        const height = 500;
+        const margin = { top: 20, right: 20, bottom: 100, left: 40 }; // Extra space for legend
+        const svg = d3.select("#plot-container").html("") // Clear previous plot
+            .append("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+            .append("g")
+            .attr("transform", `translate(${margin.left},${margin.top})`);
+        const xScale = d3.scaleLinear()
+            .domain([0, d3.max(data.x)])
+            .range([0, width]);
+        const yScale = d3.scaleLinear()
+            .domain([0, d3.max(data.y)])
+            .range([height, 0]);
+        svg.append("g")
+            .attr("transform", `translate(0,${height})`)
+            .call(d3.axisBottom(xScale));
+        svg.append("g")
+            .call(d3.axisLeft(yScale));
+        // Plot points
+        svg.selectAll(".point")
+            .data(data.x.map((d, i) => ({ x: d, y: data.y[i], status: data.status[i] })))
+            .enter().append("circle")
+            .attr("class", "point")
+            .attr("cx", d => xScale(d.x))
+            .attr("cy", d => yScale(d.y))
+            .attr("r", d => d.status === 'current' ? 7 : 5) // Slightly larger radius for 'current'
+            .attr("fill", d => d.status === 'completed' ? 'green' : (d.status === 'current' ? 'none' : 'red'))
+            .attr("stroke", d => d.status === 'current' ? 'blue' : 'none')
+            .attr("stroke-width", d => d.status === 'current' ? 2 : 0); // Blue outline for 'current'
+    });
+}
+        // Fetch and update the plot every 5 seconds
+        setInterval(fetchAndUpdatePlot, 5000);
+        fetchAndUpdatePlot(); // Initial fetch
+    </script>
+    <div class="section">
+        <h2>Video Stream 1</h2>
+        <div class="video-container">
+            <img src="{{ url_for('video_feed_0') }}" alt="Video Stream 1">
+        </div>
+        <h2>Video Stream 2</h2>
+        <div class="video-container">
+            <img src="{{ url_for('video_feed_1') }}" alt="Video Stream 2">
+        </div>
+    </div>
+    <div class="section">
+        <h2>Motor States</h2>
+        <pre id="motor-states"></pre>
+    </div>
+    <script>
+        function fetchAndUpdateMotorStates() {
+            fetch('/get_motor_states')
+            .then(response => response.text())
+            .then(data => {
+                document.getElementById('motor-states').textContent = data;
+            });
+        }
+
+        // Fetch and update the motor states every 5 seconds
+        setInterval(fetchAndUpdateMotorStates, 5000);
+        fetchAndUpdateMotorStates(); // Initial fetch
+    </script>
+</body>
+</html>

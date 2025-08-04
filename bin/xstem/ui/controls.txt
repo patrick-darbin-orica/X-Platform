@@ -1,0 +1,193 @@
+import sys
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLineEdit, QSpinBox, \
+    QDoubleSpinBox, QSlider, QVBoxLayout
+from PyQt5.QtCore import Qt
+import asyncio
+from pathlib import Path
+
+from farm_ng.canbus.tool_control_pb2 import ActuatorCommands
+from farm_ng.canbus.tool_control_pb2 import HBridgeCommand
+from farm_ng.canbus.tool_control_pb2 import HBridgeCommandType
+from farm_ng.canbus.tool_control_pb2 import PtoCommand
+from farm_ng.canbus.tool_control_pb2 import PtoCommandType
+from farm_ng.canbus.tool_control_pb2 import ToolStatuses
+from farm_ng.core.event_client import EventClient
+from farm_ng.core.event_service_pb2 import EventServiceConfig
+from farm_ng.core.events_file_reader import proto_from_json_file
+from pynput import keyboard
+
+
+class SimpleGUI(QWidget):
+    def __init__(self):
+        super().__init__()
+
+        # Initialize the layout
+        self.initUI()
+
+    async def run_tool_control(self, service_config_path="service_config.json"):
+        # Create tasks for both functions
+        tasks: list[asyncio.Task] = [
+            asyncio.create_task(self.control_tools(service_config_path)),
+            asyncio.create_task(self.stream_tool_statuses(service_config_path)),
+        ]
+        await asyncio.gather(*tasks)
+
+    def tool_control_from_key_presses(self, pressed_keys: set) -> ActuatorCommands:
+        if 'space' in pressed_keys:
+            print("Set all to passive with empty command")
+            return ActuatorCommands()
+
+        commands: ActuatorCommands = ActuatorCommands()
+
+        # PTOs controlled with a, b, c, d & left / right arrows
+        # left = forward, right = reverse, both = stop, neither / not pressed => omitted => passive
+        pto_id_mapping = {'a': 0x0, 'b': 0x1, 'c': 0x2, 'd': 0x3}
+        pto_rpm: float = 10.0
+        if 'left' in pressed_keys and 'right' in pressed_keys:
+            for pto_char in pressed_keys & {'a', 'b', 'c', 'd'}:
+                pto_id = pto_id_mapping[pto_char]
+                commands.ptos.append(PtoCommand(id=pto_id, command=PtoCommandType.PTO_STOPPED, rpm=pto_rpm))
+        elif 'left' in pressed_keys:
+            for pto_char in pressed_keys & {'a', 'b', 'c', 'd'}:
+                pto_id = pto_id_mapping[pto_char]
+                commands.ptos.append(PtoCommand(id=pto_id, command=PtoCommandType.PTO_FORWARD, rpm=pto_rpm))
+        elif 'right' in pressed_keys:
+            for pto_char in pressed_keys & {'a', 'b', 'c', 'd'}:
+                pto_id = pto_id_mapping[pto_char]
+                commands.ptos.append(PtoCommand(id=pto_id, command=PtoCommandType.PTO_REVERSE, rpm=pto_rpm))
+
+        print("KEYS:", pressed_keys)
+        return commands
+
+    async def control_tools(self, service_config_path: Path, pressed_keys=set([])) -> None:
+        """Control the tools / actuators on your Amiga.
+
+        Args:
+            service_config_path (Path): The path to the canbus service config.
+            keyboard_listener (KeyboardListener): The keyboard listener.
+        """
+        config: EventServiceConfig = proto_from_json_file(service_config_path, EventServiceConfig())
+        client: EventClient = EventClient(config)
+        # pressed_keys = set(["a", "right"])
+        while True:
+            # Send the tool control command
+            commands: ActuatorCommands = self.tool_control_from_key_presses(pressed_keys)
+            await client.request_reply("/control_tools", commands, decode=True)
+
+            # Sleep for a bit
+            await asyncio.sleep(0.1)
+
+    async def stream_tool_statuses(self, service_config_path: Path) -> None:
+        """Stream the tool statuses.
+
+        Args:
+            service_config_path (Path): The path to the canbus service config.
+        """
+
+        config: EventServiceConfig = proto_from_json_file(service_config_path, EventServiceConfig())
+
+        message: ToolStatuses
+        async for event, message in EventClient(config).subscribe(config.subscriptions[0], decode=True):
+            print("###################")
+            print(message)
+
+    def on_direction_changed(self, checked):
+        if checked:
+            self.toggle_button.setText('Up')
+            print("Button is in the 'Up' position")
+        else:
+            self.toggle_button.setText('Down')
+            print("Button is in the 'Down' position")
+
+    def on_start_stop(self, checked):
+        if checked:
+            self.start_stop_button.setText('Running')
+            print("Button is in the 'Running' position")
+        else:
+            self.start_stop_button.setText('Stopped')
+            print("Button is in the 'Stopped' position")
+
+    async def initUI(self):
+        # Create the main layout
+        main_layout = QHBoxLayout()
+
+        # Create the left section layout
+        left_layout = QVBoxLayout()
+
+        # Add buttons to the left section
+        self.go_button = QPushButton('Go')
+        self.yes_button = QPushButton('Yes')
+        self.no_button = QPushButton('No')
+        left_layout.addWidget(self.go_button)
+        left_layout.addWidget(self.yes_button)
+        left_layout.addWidget(self.no_button)
+
+        # Add text input and Ok button to the left section
+        self.text_input = QLineEdit()
+        self.ok_button = QPushButton('Ok')
+        left_layout.addWidget(self.text_input)
+        left_layout.addWidget(self.ok_button)
+
+        # Create the right section layout
+        right_layout = QVBoxLayout()
+
+        # Add up/down toggle button to the right section
+
+        self.toggle_button = QPushButton('Down')
+        self.toggle_button.setCheckable(True)
+        self.toggle_button.setStyleSheet("""QPushButton {
+        background-color: lightgray;border: 2px solid gray;
+        border-radius: 10px;
+        padding: 5px;
+        }
+        QPushButton:checked {
+        background-color: blue;
+        color: white;
+        }
+        """)
+
+        right_layout.addWidget(self.toggle_button)
+        # self.setLayout(right_layout)
+
+        self.toggle_button.toggled.connect(self.on_direction_changed)
+
+        # Add numeric field to the right section
+        self.numeric_field = QDoubleSpinBox()
+        self.numeric_field.setValue(10.0)
+        right_layout.addWidget(self.numeric_field)
+
+        # Add start/stop button to the right section
+        self.start_stop_button = QPushButton('Stopped')
+        self.start_stop_button.setCheckable(True)
+        self.start_stop_button.setStyleSheet("""QPushButton {
+                background-color: red;border: 2px solid black;
+                border-radius: 10px;
+                padding: 5px;
+                }
+                QPushButton:checked {
+                background-color: green;
+                color: white;
+                }
+                """)
+        self.start_stop_button.toggled.connect(self.on_start_stop)
+        right_layout.addWidget(self.start_stop_button)
+
+        # Add left and right sections to the main layout
+        main_layout.addLayout(left_layout)
+        main_layout.addLayout(right_layout)
+
+        # Set the main layout for the widget
+        self.setLayout(main_layout)
+
+
+async def main():
+    app = QApplication(sys.argv)
+    gui = SimpleGUI()
+    gui.show()
+    await gui.run_tool_control()
+    sys.exit(app.exec_())
+
+# Run the application
+if __name__ == '__main__':
+    asyncio.run(main())
+

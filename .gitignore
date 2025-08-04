@@ -1,0 +1,7 @@
+
+.idea/
+/bin/xstem.egg-info/
+/bin/xstem/navigation/tracks
+**/__pycache__/
+*.swp
+*.Identifier
