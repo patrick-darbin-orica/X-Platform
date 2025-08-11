@@ -1,0 +1,31 @@
+{
+  "configs": [
+    {
+      "name": "track_follower",
+      "port": 20101,
+      "host": "fox-furrow",
+      "subscriptions": [
+        {
+            "uri": {
+            "path": "/state",
+            "query": "service_name=track_follower"
+            },
+            "every_n": 1
+        }
+    ],
+    "log_level": "INFO"
+    },
+    {
+      "name": "filter",
+      "port": 20001,
+      "host": "fox-furrow"
+    },
+    {
+    "name": "canbus",
+    "port": 6001,
+    "host": "fox-furrow",
+    "log_level": "INFO"
+}
+
+  ]
+}
