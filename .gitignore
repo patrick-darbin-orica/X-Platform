@@ -2,6 +2,7 @@
 .idea/
 /bin/xstem.egg-info/
 /bin/xstem/navigation/tracks
+/bin/venv
 **/__pycache__/
 *.swp
 *.Identifier
