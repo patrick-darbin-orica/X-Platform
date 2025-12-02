@@ -1,0 +1,45 @@
+{
+  "recommendations": [
+    // Python Development
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "ms-python.black-formatter",
+
+    // Git Integration
+    "eamodio.gitlens",
+    "donjayamanne.githistory",
+    "github.vscode-pull-request-github",
+    "mhutchie.git-graph",
+
+    // Code Quality
+    "ms-python.flake8",
+    "charliermarsh.ruff",
+
+    // Remote Development
+    "ms-vscode-remote.remote-ssh",
+    "ms-vscode-remote.remote-ssh-edit",
+
+    // YAML Support (for config files)
+    "redhat.vscode-yaml",
+
+    // Markdown Support (for documentation)
+    "yzhang.markdown-all-in-one",
+    "DavidAnson.vscode-markdownlint",
+
+    // General Productivity
+    "streetsidesoftware.code-spell-checker",
+    "gruntfuggly.todo-tree",
+    "usernamehw.errorlens",
+    "oderwat.indent-rainbow",
+
+    // Testing
+    "littlefoxteam.vscode-python-test-adapter",
+
+    // Jupyter (if using notebooks)
+    "ms-toolsai.jupyter"
+  ],
+  "unwantedRecommendations": [
+    // Avoid conflicting formatters
+    "ms-python.autopep8"
+  ]
+}

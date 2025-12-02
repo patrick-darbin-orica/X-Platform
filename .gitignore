@@ -1,8 +1,57 @@
-
+# IDE
 .idea/
+.vscode/.ropeproject
+*.swp
+
+# Python
+**/__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.eggs/
+*.egg
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.cover
+.hypothesis/
+
+# Virtual environments
+/bin/venv
+venv/
+.venv/
+ENV/
+env/
+
+# Build artifacts
 /bin/xstem.egg-info/
 /bin/xstem/navigation/tracks
-/bin/venv
-**/__pycache__/
-*.swp
+dist/
+build/
+
+# OS
 *.Identifier
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.log
+*.bak
+
+# Test coverage
+.coverage.*
+coverage.xml
+*.coveragerc.local
+
+# Large files
+*.engine
+*.onnx
+*.trt
+models/*.engine
+models/*.onnx
+
+# Data files
+*.csv.backup
+waypoints/*.backup

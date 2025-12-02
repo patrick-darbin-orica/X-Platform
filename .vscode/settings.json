@@ -1,0 +1,135 @@
+{
+  // Python Language Settings
+  // Note: Each team member should select their own Python interpreter
+  // Use Cmd+Shift+P -> "Python: Select Interpreter"
+  // Common locations: system python3, conda env, or venv
+  // This setting is just a suggestion, not enforced
+
+  // Linting
+  "python.linting.enabled": true,
+  "python.linting.flake8Enabled": true,
+  "python.linting.flake8Path": "flake8",
+  "python.linting.flake8Args": [
+    "--config=${workspaceFolder}/.flake8"
+  ],
+  "python.linting.pylintEnabled": false,
+  "python.linting.lintOnSave": true,
+
+  // Formatting
+  "python.formatting.provider": "none",
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.black-formatter",
+    "editor.formatOnSave": true,
+    "editor.tabSize": 4,
+    "editor.insertSpaces": true,
+    "editor.rulers": [72, 88]
+  },
+  "black-formatter.args": [
+    "--line-length=88"
+  ],
+
+  // Type Checking
+  "python.analysis.typeCheckingMode": "basic",
+  "python.analysis.diagnosticMode": "workspace",
+  "python.analysis.autoImportCompletions": true,
+
+  // Testing
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestArgs": [
+    "tests"
+  ],
+  "python.testing.autoTestDiscoverOnSaveEnabled": true,
+
+  // Editor Settings
+  "editor.formatOnSave": true,
+  "editor.formatOnPaste": false,
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": "explicit"
+  },
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "files.trimFinalNewlines": true,
+
+  // Git Settings
+  "git.confirmSync": false,
+  "git.autofetch": true,
+  "git.enableSmartCommit": false,
+  "git.postCommitCommand": "none",
+  "git.inputValidationLength": 50,
+  "git.inputValidationSubjectLength": 50,
+
+  // File Associations
+  "files.associations": {
+    "*.yaml": "yaml",
+    ".gitmessage": "git-commit",
+    ".flake8": "ini"
+  },
+
+  // Exclude from Search/Watch
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/*.pyc": true,
+    "**/.pytest_cache": true,
+    "**/.mypy_cache": true,
+    "**/*.egg-info": true
+  },
+  "files.watcherExclude": {
+    "**/__pycache__": true,
+    "**/*.pyc": true,
+    "**/.pytest_cache": true,
+    "**/.git/objects/**": true,
+    "**/.git/subtree-cache/**": true
+  },
+
+  // Terminal
+  "terminal.integrated.cwd": "${workspaceFolder}",
+  "terminal.integrated.scrollback": 10000,
+
+  // Language-Specific Settings
+  "[markdown]": {
+    "editor.wordWrap": "on",
+    "editor.quickSuggestions": {
+      "comments": "off",
+      "strings": "off",
+      "other": "off"
+    }
+  },
+  "[yaml]": {
+    "editor.insertSpaces": true,
+    "editor.tabSize": 2,
+    "editor.autoIndent": "advanced"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "vscode.json-language-features",
+    "editor.tabSize": 2
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "vscode.json-language-features",
+    "editor.tabSize": 2
+  },
+
+  // Remote SSH Settings
+  "remote.SSH.useLocalServer": true,
+  "remote.SSH.showLoginTerminal": true,
+  "remote.SSH.lockfilesInTmp": true,
+
+  // Recommendations
+  "workbench.editor.highlightModifiedTabs": true,
+  "workbench.editor.enablePreview": false,
+  "explorer.confirmDelete": true,
+  "explorer.confirmDragAndDrop": false,
+
+  // Inline Hints
+  "editor.inlayHints.enabled": "onUnlessPressed",
+  "python.analysis.inlayHints.functionReturnTypes": true,
+  "python.analysis.inlayHints.variableTypes": false,
+
+  // GitLens (if installed)
+  "gitlens.codeLens.enabled": true,
+  "gitlens.currentLine.enabled": true,
+
+  // Bracket Pair Colorization
+  "editor.bracketPairColorization.enabled": true,
+  "editor.guides.bracketPairs": true
+}
