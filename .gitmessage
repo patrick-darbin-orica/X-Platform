@@ -1,0 +1,29 @@
+# [TYPE] Brief summary (50 chars or less)
+
+# More detailed explanation (wrap at 72 chars)
+# - Why this change is needed
+# - What problem it solves
+# - Any side effects or implications
+
+# Footer (optional): Link to issues, breaking changes, etc.
+# Closes #123
+# Breaking change: ...
+
+# --- COMMIT TYPE GUIDE ---
+# [FEAT]     New feature or functionality
+# [FIX]      Bug fix
+# [REFACTOR] Code restructuring without changing behavior
+# [DOCS]     Documentation changes only
+# [TEST]     Adding or updating tests
+# [STYLE]    Formatting, whitespace, etc. (no code change)
+# [PERF]     Performance improvements
+# [CHORE]    Build, dependencies, tooling, etc.
+# [OVERHAUL] Major system rewrite or restructuring
+#
+# Example:
+# [FEAT] Add vision-based hole detection
+#
+# Implements forward-facing camera hole detection using OAK-D cameras.
+# Falls back to CSV waypoints if detection fails within timeout.
+#
+# Closes #42

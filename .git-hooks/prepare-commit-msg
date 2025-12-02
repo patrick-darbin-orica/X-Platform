@@ -1,0 +1,21 @@
+#!/bin/bash
+# prepare-commit-msg hook
+# Automatically populates commit message with template if message is empty
+
+COMMIT_MSG_FILE=$1
+COMMIT_SOURCE=$2
+
+# Only use template for regular commits (not merge, squash, etc.)
+if [ -z "$COMMIT_SOURCE" ]; then
+    # Check if commit message file is empty or only contains comments
+    if ! grep -q '^[^#]' "$COMMIT_MSG_FILE"; then
+        # Get the template file path (check repo-level config, then global)
+        TEMPLATE=$(git config --get commit.template)
+
+        if [ -n "$TEMPLATE" ] && [ -f "$TEMPLATE" ]; then
+            cat "$TEMPLATE" > "$COMMIT_MSG_FILE"
+        elif [ -f "$(git rev-parse --show-toplevel)/.gitmessage" ]; then
+            cat "$(git rev-parse --show-toplevel)/.gitmessage" > "$COMMIT_MSG_FILE"
+        fi
+    fi
+fi
