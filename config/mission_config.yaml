@@ -1,0 +1,16 @@
+# Mission Configuration
+# This file specifies which module to use and mission-specific settings
+
+mission_name: "Field 1 Stemming"
+
+# Module Selection
+# Options: "xstem", "xprime", "none" (navigation only, no module actions)
+module_name: "none"
+
+# Blast Pattern Configuration
+blast_pattern:
+  csv_path: "~/Amiga/amiga-adk/py/examples/waypoint_navigation/surveyed-waypoints/kktcBack2Lanes.csv"
+  coordinate_system: "ENU"           # Input CSV coordinate system
+  last_row_waypoint_index: 3         # Last waypoint of each echelon/row
+  turn_direction: "left"             # Direction for U-turns
+  row_spacing_m: 2.8                 # Spacing between echelons

@@ -1,0 +1,39 @@
+# XStem Module Configuration
+# Tool-specific settings for the stemming module (dipbob + chute)
+
+module_name: "xstem"
+module_type: "stemming"
+
+config:
+  # Tool Offset Configuration
+  # Offset from robot center to dipbob position
+  tool_offset:
+    dipbob_x: 0.25                   # meters forward from robot center
+    dipbob_y: 0.0
+    dipbob_z: 0.0
+
+    # Offset from dipbob to chute position
+    chute_offset_x: 0.15             # meters forward from dipbob
+    chute_offset_y: 0.0
+    chute_offset_z: 0.0
+
+  # Dipbob Deployment Configuration
+  dipbob:
+    can_arbitration_id: 0x18FF0007   # CAN ID for dipbob trigger
+    can_payload: [0x06, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00]
+    ack_timeout_s: 5.0               # Wait time for measurement ACK
+    measurement_settle_s: 2.0        # Settle time after deployment
+
+  # Chute Actuation Configuration
+  chute:
+    actuator_id: 0                   # H-bridge actuator ID
+    open_duration_s: 0.2             # Pulse duration for opening
+    close_duration_s: 0.3            # Pulse duration for closing
+    control_rate_hz: 10.0            # Actuation control rate
+    pre_dispense_settle_s: 2.0       # Settle time before dispensing
+
+  # Alignment Tolerances
+  alignment:
+    dipbob_tolerance_m: 0.02         # Alignment tolerance for dipbob
+    chute_tolerance_m: 0.02          # Alignment tolerance for chute
+    check_timeout_s: 10.0            # Timeout for alignment checks

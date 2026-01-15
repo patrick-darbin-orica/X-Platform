@@ -27,7 +27,7 @@ services:
     port: 50010
 
 waypoints:
-  csv_path: "~/Amiga/xstem/waypoints/field_1.csv"
+  csv_path: "~/Amiga/amiga-adk/py/examples/waypoint_navigation/surveyed-waypoints/kktcBack2Lanes.csv"
   coordinate_system: "ENU"
   last_row_waypoint_index: 6
   turn_direction: "left"
@@ -47,7 +47,7 @@ tool:
   chute_rate_hz: 10.0
 
 vision:
-  enabled: true
+  enabled: false
   mode: "stop_to_detect"
   search_radius_m: 1.0
   detection_timeout_s: 10.0
@@ -56,7 +56,7 @@ vision:
   forward_camera:
     service_name: "oak/1"
     role: "forward"
-    model_path: "~/Amiga/xstem/models/collar_yoloe.engine"
+    model_path: "~/Amiga/xstem/models/best.pt"
     offset_x: 0.55
     offset_y: 0.0
     offset_z: 0.88
@@ -65,7 +65,7 @@ vision:
   downward_camera:
     service_name: "oak/0"
     role: "downward"
-    model_path: "~/Amiga/xstem/models/hole_yoloe.engine"
+    model_path: "~/Amiga/xstem/models/best.pt"
     offset_x: 0.25
     offset_y: 0.0
     offset_z: 0.5

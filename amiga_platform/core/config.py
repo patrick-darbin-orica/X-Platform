@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Dict, Literal, Optional
 
 import yaml
 from pydantic import BaseModel, Field
@@ -107,7 +107,7 @@ class ThresholdsConfig(BaseModel):
 class XStemConfig(BaseModel):
     """Master configuration (v1 - backward compatible)."""
 
-    services: dict[str, ServiceConfig]
+    services: Dict[str, ServiceConfig]
     waypoints: WaypointConfig
     tool: ToolConfig
     vision: VisionConfig

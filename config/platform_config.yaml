@@ -1,0 +1,101 @@
+# Amiga Base Platform Configuration
+# This file contains all platform-level settings that are stable across missions
+
+platform_name: "Amiga Base Platform"
+platform_version: "2.0.0"
+
+# EventService Endpoints
+services:
+  filter:
+    name: "filter"
+    host: "localhost"
+    port: 20001
+
+  track_follower:
+    name: "track_follower"
+    host: "localhost"
+    port: 20101
+    timeout_s: 60.0
+
+  canbus:
+    name: "canbus"
+    host: "localhost"
+    port: 6001
+
+  oak0:
+    name: "oak/0"
+    host: "localhost"
+    port: 50010
+
+  oak1:
+    name: "oak/1"
+    host: "localhost"
+    port: 50010
+
+# Filter Service Configuration
+filter:
+  # Filter convergence checks
+  convergence_check_timeout_s: 5.0
+  convergence_max_retries: 3
+
+  # IMU wiggle for filter convergence
+  imu_wiggle_duration_s: 3.0
+  imu_wiggle_angular_velocity_rad_s: 0.3
+  imu_wiggle_check_rate_hz: 20.0
+
+# Navigation Configuration
+navigation:
+  # Search zone approach
+  search_zone_approach_offset_m: 1.2  # Stop distance before waypoint for vision
+  search_zone_search_radius_m: 1.0    # Radius for vision search
+
+  # Track generation
+  segment_spacing_m: 0.5              # Waypoint density on straight segments
+  turn_spacing_m: 0.15                # Waypoint density on turns
+  execution_timeout_s: 60.0           # Max time for segment execution
+  track_load_wait_s: 1.0              # Wait after setting track
+
+  # Accuracy thresholds
+  positioning_tolerance_m: 0.05
+  heading_tolerance_deg: 10.0
+
+  # Row-end maneuver
+  headland_buffer_m: 2.0              # Distance into headland for U-turn
+  turn_angle_deg: 90.0                # U-turn angle
+
+  # Error recovery
+  max_retries: 3
+  segment_timeout_fallback: true
+  retry_delay_s: 1.0
+
+# Vision System Configuration
+vision:
+  enabled: true
+  detection_timeout_s: 10.0
+  min_confidence: 0.7
+  averaging_samples: 3                # Minimum samples for detection averaging
+  alignment_check_timeout_s: 10.0
+  fov_width_m: 0.5                    # Approximate field of view width
+
+  # Forward-facing camera (for hole detection ahead)
+  forward_camera:
+    service_name: "oak/1"
+    model_path: "~/Amiga/xstem/models/best.pt"
+    offset_x: 0.55                    # Camera position on robot (meters)
+    offset_y: 0.0
+    offset_z: 0.88
+    pitch_deg: 30.0                   # Camera tilt angle
+
+  # Downward-facing camera (for alignment checks)
+  downward_camera:
+    service_name: "oak/0"
+    model_path: "~/Amiga/xstem/models/best.pt"
+    offset_x: 0.25
+    offset_y: 0.0
+    offset_z: 0.5
+    pitch_deg: -90.0                  # Pointing straight down
+
+# CAN Bus Configuration
+can:
+  command_rate_hz: 20.0               # Rate for CAN commands (Hz)
+  recovery_delay_s: 0.5               # Delay for CAN recovery

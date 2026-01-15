@@ -8,16 +8,20 @@ import signal
 import sys
 from pathlib import Path
 
-from control.stemming_module import StemmingModule
-from control.tool_manager import ToolManager
-from core.config import XStemConfig
-from core.service_manager import ServiceManager
-from core.state_machine import NavigationStateMachine, NavState
-from hardware.actuator import CanHBridgeActuator, NullActuator
-from hardware.filter_utils import check_filter_convergence, imu_wiggle
-from navigation.navigation_manager import NavigationManager
-from navigation.path_planner import PathPlanner
-from vision.vision_system import VisionSystem
+# Import module system
+from modules.base_module import BaseModule, ModuleContext, ModuleResult
+from modules.registry import get_global_registry
+import modules.xstem  # Auto-registers xstem module
+
+# Import platform components
+from amiga_platform.core.blast_pattern import BlastPattern
+from amiga_platform.core.config import XStemConfig
+from amiga_platform.core.service_manager import ServiceManager
+from amiga_platform.core.state_machine import NavigationStateMachine, NavState
+from amiga_platform.hardware.filter_utils import check_filter_convergence, imu_wiggle
+from amiga_platform.navigation.navigation_manager import NavigationManager
+from amiga_platform.navigation.path_planner import PathPlanner
+from amiga_platform.vision.vision_system import VisionSystem
 
 logging.basicConfig(
     level=logging.INFO,
@@ -46,7 +50,8 @@ class XStemNavigator:
         self.path_planner = None
         self.nav_manager = None
         self.vision = None
-        self.tool_manager = None
+        self.module = None
+        self.blast_pattern = None
 
     async def setup(self) -> None:
         """Initialize all components."""
@@ -57,6 +62,14 @@ class XStemNavigator:
             self.config.waypoints,
             self.config.tool,
             self.services.filter,
+        )
+
+        # Blast pattern (mission state tracking)
+        csv_name = Path(str(self.config.waypoints.csv_path)).stem  # Get filename without extension
+        self.blast_pattern = BlastPattern(
+            holes=self.path_planner.hole_poses,  # Original hole positions
+            last_row_waypoint_index=self.config.waypoints.last_row_waypoint_index,
+            mission_name=f"mission_{csv_name}",
         )
 
         # Navigation manager
@@ -79,23 +92,55 @@ class XStemNavigator:
             logger.info("Vision system disabled")
             self.vision = None
 
-        # Actuator
-        if self.config.tool.chute_actuator_id >= 0:
-            actuator = CanHBridgeActuator(
-                self.services.canbus,
-                self.config.tool.chute_actuator_id,
-            )
-        else:
-            actuator = NullActuator()
+        # Load module via registry
+        # Map tool.type to module name (temporary until multi-tier config is integrated)
+        tool_type = self.config.tool.type
+        module_name_map = {
+            "stemming": "xstem",
+            "none": "none",
+            "priming": "xprime",  # For future
+        }
+        module_name = module_name_map.get(tool_type, "none")
+        logger.info(f"Loading module: {module_name} (tool type: {tool_type})")
 
-        # Tool manager
-        stemming_module = StemmingModule(
-            self.services.canbus,
-            actuator,
-            self.vision,
-            self.config.tool.dict(),
-        )
-        self.tool_manager = ToolManager(stemming_module)
+        registry = get_global_registry()
+        try:
+            ModuleClass = registry.get(module_name)
+            self.module = ModuleClass()
+            logger.info(f"✓ Module instantiated: {self.module.module_name}")
+
+            # Initialize module with platform context
+            context = ModuleContext(
+                hole_position=None,  # Will be provided during execute()
+                robot_pose=None,     # Will be provided during execute()
+                waypoint_index=0,    # Will be provided during execute()
+                canbus_client=self.services.canbus,
+                filter_client=self.services.filter,
+                vision_system=self.vision if hasattr(self, 'vision') else None,
+                module_config=self.config.tool.dict() if hasattr(self.config.tool, 'dict') else {}
+            )
+
+            await self.module.initialize(context)
+
+            # Verify module readiness
+            if not await self.module.verify_ready():
+                logger.error("Module not ready!")
+            else:
+                logger.info("✓ Module ready")
+
+        except KeyError:
+            logger.warning(f"Module '{module_name}' not found in registry, using NullModule")
+            ModuleClass = registry.get("none")
+            self.module = ModuleClass()
+            await self.module.initialize(ModuleContext(
+                hole_position=None,
+                robot_pose=None,
+                waypoint_index=0,
+                canbus_client=self.services.canbus,
+                filter_client=self.services.filter,
+                vision_system=None,
+                module_config={}
+            ))
 
         # Check filter convergence
         converged = await check_filter_convergence(self.services.filter)
@@ -117,24 +162,35 @@ class XStemNavigator:
 
         try:
             while not self.shutdown_requested and not self.state_machine.is_terminal():
-                # Get next waypoint
-                waypoint = self.path_planner.get_next_waypoint()
+                # Get next hole from blast pattern
+                hole = self.blast_pattern.get_next_hole()
 
-                if waypoint is None:
-                    logger.info("All waypoints completed")
+                if hole is None:
+                    logger.info("All holes completed")
+                    stats = self.blast_pattern.get_completion_stats()
+                    logger.info(
+                        f"Mission complete: {stats['completed']} completed, "
+                        f"{stats['failed']} failed, {stats['skipped']} skipped"
+                    )
                     self.state_machine.all_waypoints_complete()
                     break
 
-                wp_index, wp_pose = waypoint
-                logger.info(f"========== Navigating to waypoint {wp_index} ==========")
+                wp_index = hole.index
+                # Waypoints are 1-indexed in PathPlanner (CSV row numbering)
+                wp_pose = self.path_planner.waypoints[wp_index + 1]  # Get navigation target
+                logger.info(f"========== Navigating to hole {wp_index} (waypoint {wp_index + 1}) ==========")
+
+                # Mark hole as in progress
+                self.blast_pattern.mark_in_progress(wp_index)
 
                 # State: PLANNING
                 self.state_machine.waypoint_planned()
 
-                # Check for row-end maneuver
-                if self.path_planner.is_row_end():
-                    logger.info("Row end detected, executing U-turn maneuver")
+                # Check for row-end maneuver (echelon transition)
+                if self.blast_pattern.is_echelon_end(wp_index):
+                    logger.info("Echelon end detected, executing U-turn maneuver")
                     await self._execute_row_end_maneuver()
+                    self.blast_pattern.mark_completed(wp_index)  # Mark as completed after U-turn
                     continue
 
                 # Plan approach segment (stop before waypoint for vision)
@@ -187,18 +243,35 @@ class XStemNavigator:
                     self.state_machine.track_failed()
                     continue
 
-                # State: DEPLOYING
+                # State: MODULE_PHASE (Execute module action at hole)
                 self.state_machine.track_complete()
-                logger.info("Deploying tool...")
-                success = await self.tool_manager.execute_deployment(final_target)
+                logger.info(f"Executing module at waypoint {wp_index}...")
 
-                if success:
-                    logger.info(f"✓ Waypoint {wp_index} completed successfully")
+                # Create execution context for module
+                current_pose = await self.path_planner.get_current_pose()
+                exec_context = ModuleContext(
+                    hole_position=final_target,
+                    robot_pose=current_pose,
+                    waypoint_index=wp_index,
+                    canbus_client=self.services.canbus,
+                    filter_client=self.services.filter,
+                    vision_system=self.vision if hasattr(self, 'vision') else None,
+                    module_config=self.config.tool.dict() if hasattr(self.config.tool, 'dict') else {}
+                )
+
+                # Execute module
+                result = await self.module.execute(exec_context)
+
+                # State: UPDATING_PATTERN (Update blast pattern with module result)
+                if result.success:
+                    logger.info(f"✓ Hole {wp_index} completed successfully")
+                    self.blast_pattern.mark_completed(wp_index, measurements=result.measurements)
                     self.state_machine.tool_complete()
                 else:
-                    logger.error(f"✗ Tool deployment failed at waypoint {wp_index}")
+                    logger.error(f"✗ Module execution failed at hole {wp_index}: {result.error}")
+                    self.blast_pattern.mark_failed(wp_index, error=result.error or "Unknown error")
                     self.state_machine.tool_failed()
-                    # TODO: Implement recovery logic
+                    # TODO: Implement recovery logic (retry/skip/abort)
 
         except asyncio.CancelledError:
             logger.info("Navigation cancelled")
@@ -231,6 +304,10 @@ class XStemNavigator:
         """Clean shutdown."""
         logger.info("Shutting down...")
         self.shutdown_requested = True
+
+        # Shutdown module
+        if self.module:
+            await self.module.shutdown()
 
         # Stop navigation manager monitoring
         if self.nav_manager:

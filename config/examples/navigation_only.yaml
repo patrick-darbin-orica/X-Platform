@@ -1,0 +1,15 @@
+# Example Mission Configuration - Navigation Only (No Module)
+# Use this for testing navigation without tool deployment
+
+mission_name: "Navigation Test - Field 1"
+
+# No module (navigation only)
+module_name: "none"
+
+# Blast Pattern Configuration
+blast_pattern:
+  csv_path: "~/Amiga/xstem/waypoints/field_1.csv"
+  coordinate_system: "ENU"
+  last_row_waypoint_index: 6
+  turn_direction: "left"
+  row_spacing_m: 6.0
