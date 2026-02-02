@@ -5,6 +5,8 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING
 
+from farm_ng.core.event_service_pb2 import SubscribeRequest
+from farm_ng.core.uri_pb2 import Uri
 from farm_ng.track.track_pb2 import (
     Track,
     TrackFollowerState,
@@ -39,6 +41,7 @@ class NavigationManager:
         # Event coordination
         self.track_complete = asyncio.Event()
         self.track_failed = asyncio.Event()
+        self.shutdown_event = asyncio.Event()  # For immediate shutdown
         self.current_status: TrackStatusEnum | None = None
 
         # Thread safety
@@ -57,7 +60,15 @@ class NavigationManager:
         """Background task to monitor track follower state."""
         try:
             config = self.track_follower.config
-            subscription = config.subscriptions[0]
+            # Use configured subscription or create one for /state endpoint
+            if config.subscriptions:
+                subscription = config.subscriptions[0]
+            else:
+                subscription = SubscribeRequest(
+                    uri=Uri(path="/state"),
+                    every_n=1,
+                )
+            logger.info(f"[TRACK] Subscribing to track_follower state...")
 
             async for event, message in self.track_follower.subscribe(
                 subscription, decode=True
@@ -67,17 +78,27 @@ class NavigationManager:
 
                 if isinstance(message, TrackFollowerState):
                     status = message.status.track_status
+                    prev_status = self.current_status
                     self.current_status = status
 
+                    # Log status changes
+                    if prev_status != status:
+                        try:
+                            status_name = TrackStatusEnum.Name(status)
+                            prev_name = TrackStatusEnum.Name(prev_status) if prev_status else "None"
+                            logger.info(f"[TRACK] Status: {prev_name} → {status_name}")
+                        except Exception:
+                            logger.info(f"[TRACK] Status: {prev_status} → {status}")
+
                     if status == TrackStatusEnum.TRACK_COMPLETE:
-                        logger.debug("Track complete event received")
+                        logger.info("Track complete event received")
                         self.track_complete.set()
                     elif status in [
                         TrackStatusEnum.TRACK_FAILED,
                         TrackStatusEnum.TRACK_ABORTED,
                         TrackStatusEnum.TRACK_CANCELLED,
                     ]:
-                        logger.warning(f"Track failed with status: {status}")
+                        logger.warning(f"Track failed with status: {TrackStatusEnum.Name(status)}")
                         self.track_failed.set()
         except asyncio.CancelledError:
             logger.info("State monitoring cancelled")
@@ -111,11 +132,12 @@ class NavigationManager:
 
         logger.info("Track execution started")
 
-        # Wait for completion
+        # Wait for completion, failure, or shutdown
         done, pending = await asyncio.wait(
             [
                 asyncio.create_task(self.track_complete.wait()),
                 asyncio.create_task(self.track_failed.wait()),
+                asyncio.create_task(self.shutdown_event.wait()),
             ],
             timeout=timeout,
             return_when=asyncio.FIRST_COMPLETED,
@@ -128,6 +150,12 @@ class NavigationManager:
                 await task
             except asyncio.CancelledError:
                 pass
+
+        # Check for shutdown first
+        if self.shutdown_event.is_set():
+            logger.info("Shutdown requested - cancelling track")
+            await self.cancel_track()
+            return False
 
         if not done:
             logger.warning("Track execution timeout")
@@ -151,10 +179,21 @@ class NavigationManager:
             except Exception as e:
                 logger.warning(f"Error cancelling track: {e}")
 
+    def request_immediate_shutdown(self) -> None:
+        """Request immediate shutdown - call from signal handler.
+
+        This sets the shutdown event which will interrupt any pending
+        track execution and trigger cancellation.
+        """
+        logger.info("Immediate shutdown requested")
+        self.shutdown_requested = True
+        self.shutdown_event.set()
+
     async def shutdown(self) -> None:
         """Clean shutdown."""
         logger.info("Shutting down navigation manager...")
         self.shutdown_requested = True
+        self.shutdown_event.set()  # Ensure any pending waits are interrupted
 
         if self.monitor_task and not self.monitor_task.done():
             self.monitor_task.cancel()

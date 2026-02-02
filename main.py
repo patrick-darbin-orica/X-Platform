@@ -6,6 +6,7 @@ import asyncio
 import logging
 import signal
 import sys
+from datetime import datetime
 from pathlib import Path
 
 # Import module system
@@ -23,10 +24,43 @@ from amiga_platform.navigation.navigation_manager import NavigationManager
 from amiga_platform.navigation.path_planner import PathPlanner
 from amiga_platform.vision.vision_system import VisionSystem
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
+def setup_logging() -> Path:
+    """Configure logging to both console and file.
+
+    Returns:
+        Path to the log file
+    """
+    # Create logs directory
+    log_dir = Path(__file__).parent / "logs"
+    log_dir.mkdir(exist_ok=True)
+
+    # Create timestamped log file
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    log_file = log_dir / f"mission_{timestamp}.log"
+
+    # Configure root logger
+    log_format = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+
+    # Console handler
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(logging.Formatter(log_format))
+
+    # File handler
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setLevel(logging.DEBUG)  # More verbose in file
+    file_handler.setFormatter(logging.Formatter(log_format))
+
+    # Configure root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.DEBUG)
+    root_logger.addHandler(console_handler)
+    root_logger.addHandler(file_handler)
+
+    return log_file
+
+
+log_file = setup_logging()
 logger = logging.getLogger(__name__)
 
 
@@ -210,6 +244,11 @@ class XStemNavigator:
                     # TODO: Implement retry logic
                     continue
 
+                # Check for shutdown before starting next track
+                if self.shutdown_requested:
+                    logger.info("Shutdown requested after approach - exiting")
+                    break
+
                 # State: DETECTING
                 hole_pose = None
                 if self.config.vision.enabled and self.vision:
@@ -242,6 +281,11 @@ class XStemNavigator:
                     logger.error("Final approach failed")
                     self.state_machine.track_failed()
                     continue
+
+                # Check for shutdown before executing module
+                if self.shutdown_requested:
+                    logger.info("Shutdown requested after final approach - exiting")
+                    break
 
                 # State: MODULE_PHASE (Execute module action at hole)
                 self.state_machine.track_complete()
@@ -330,8 +374,11 @@ def signal_handler(navigator: XStemNavigator):
     """
 
     def handler(signum, frame):
-        logger.info(f"Received signal {signum}")
+        logger.info(f"Received signal {signum} - requesting immediate shutdown")
         navigator.shutdown_requested = True
+        # Trigger immediate track cancellation
+        if navigator.nav_manager:
+            navigator.nav_manager.request_immediate_shutdown()
 
     return handler
 
@@ -342,6 +389,8 @@ async def main(config_path: Path) -> None:
     Args:
         config_path: Path to configuration YAML file
     """
+    logger.info(f"Logging to: {log_file}")
+
     # Load configuration
     config = XStemConfig.from_yaml(config_path)
     logger.info(f"Loaded configuration from {config_path}")
