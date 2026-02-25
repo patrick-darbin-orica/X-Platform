@@ -1,50 +1,14 @@
 # XStem Navigation System Configuration
 
-services:
-  filter:
-    name: "filter"
-    host: "localhost"
-    port: 20001
-
-  track_follower:
-    name: "track_follower"
-    host: "localhost"
-    port: 20101
-
-  canbus:
-    name: "canbus"
-    host: "localhost"
-    port: 6001
-
-  oak0:
-    name: "oak/0"
-    host: "localhost"
-    port: 50010
-
-  oak1:
-    name: "oak/1"
-    host: "localhost"
-    port: 50010
-
 waypoints:
-  csv_path: "~/Amiga/amiga-adk/py/examples/waypoint_navigation/surveyed-waypoints/kktcBack2Lanes.csv"
+  csv_path: "~/Amiga/amiga-adk/py/examples/waypoint_navigation/surveyed-waypoints/kktcRearRoad.csv"
   coordinate_system: "ENU"
-  last_row_waypoint_index: 6
+  last_row_waypoint_index: 3
   turn_direction: "left"
-  row_spacing_m: 6.0
-  headland_buffer_m: 2.0
+  row_spacing_m: 3.0
+  headland_buffer_m: 3.0
 
-tool:
-  type: "stemming"
-  offset_x: 0.25
-  offset_y: 0.0
-  offset_z: 0.0
-  dipbob_can_signal: "dipbob_deploy"
-  dipbob_ack_timeout_s: 5.0
-  chute_actuator_id: 0
-  chute_open_duration_s: 0.2
-  chute_close_duration_s: 0.3
-  chute_rate_hz: 10.0
+module: xstem
 
 vision:
   enabled: false
@@ -56,7 +20,7 @@ vision:
   forward_camera:
     service_name: "oak/1"
     role: "forward"
-    model_path: "~/Amiga/xstem/models/best.pt"
+    model_path: "~/Amiga/X-Platform/models/best1.engine"
     offset_x: 0.55
     offset_y: 0.0
     offset_z: 0.88
@@ -65,7 +29,7 @@ vision:
   downward_camera:
     service_name: "oak/0"
     role: "downward"
-    model_path: "~/Amiga/xstem/models/best.pt"
+    model_path: "~/Amiga/X-Platform/models/best1.engine"
     offset_x: 0.25
     offset_y: 0.0
     offset_z: 0.5

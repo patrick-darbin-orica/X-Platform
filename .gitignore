@@ -55,5 +55,9 @@ models/*.onnx
 # Data files
 *.csv.backup
 waypoints/*.backup
+
 # Mission logs
 logs/*.log
+
+# md files
+*.md

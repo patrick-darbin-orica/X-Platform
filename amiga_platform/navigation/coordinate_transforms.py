@@ -20,31 +20,52 @@ logger = logging.getLogger(__name__)
 class CoordinateTransforms:
     """Handle all coordinate transformations."""
 
-    def __init__(self, tool_config: dict) -> None:
-        """Initialize with tool offset.
+    def __init__(self) -> None:
+        """Initialize coordinate transforms.
 
-        Args:
-            tool_config: Tool configuration dict with offset_x, offset_y, offset_z
+        Tool offsets are applied on-demand via apply_tool_offset(), not at init.
         """
-        self.robot_from_tool = self._create_tool_offset(tool_config)
+        pass
 
-    def _create_tool_offset(self, config: dict) -> Pose3F64:
-        """Create robot_from_tool transformation.
+    def apply_tool_offset(self, hole_pose: Pose3F64, tool_config: dict) -> Pose3F64:
+        """Apply tool offset to a hole position to get robot navigation target.
+
+        The robot must position itself such that the tool is over the hole.
+        This requires: world_from_robot = world_from_hole * hole_from_robot
 
         Args:
-            config: Tool configuration dict
+            hole_pose: Hole position in world frame
+            tool_config: Tool configuration dict with offset_x, offset_y, offset_z
 
         Returns:
-            Pose3F64 representing the tool offset from robot center
+            Robot navigation target in world frame (where robot should be
+            so that the tool is positioned over the hole)
         """
-        return Pose3F64(
+        # Create tool offset transformation
+        robot_from_tool = Pose3F64(
             a_from_b=Isometry3F64(
-                [config["offset_x"], config["offset_y"], config["offset_z"]],
+                [tool_config["offset_x"], tool_config["offset_y"], tool_config["offset_z"]],
                 Rotation3F64(),
             ),
             frame_a="robot",
             frame_b="tool",
         )
+
+        world_from_hole = Pose3F64(
+            a_from_b=hole_pose.a_from_b,
+            frame_a="world",
+            frame_b="hole",
+            tangent_of_b_in_a=hole_pose.tangent_of_b_in_a,
+        )
+
+        # Inverse of robot_from_tool gives us hole_from_robot
+        hole_from_robot = robot_from_tool.inverse()
+        hole_from_robot.frame_a = "hole"
+        hole_from_robot.frame_b = "robot"
+
+        # Compose: world_from_robot = world_from_hole * hole_from_robot
+        world_from_robot = world_from_hole * hole_from_robot
+        return world_from_robot
 
     def load_waypoints_from_csv(
         self, csv_path: Path, last_row_index: int
@@ -91,41 +112,6 @@ class CoordinateTransforms:
 
         logger.info(f"Loaded {len(poses)} waypoints from {csv_path}")
         return poses
-
-    def transform_holes_to_robot_targets(
-        self, hole_poses: dict[int, Pose3F64]
-    ) -> dict[int, Pose3F64]:
-        """Transform hole positions to robot navigation targets.
-
-        The robot must position itself such that the tool (dipbob/chute) is over the hole.
-        This requires: world_from_robot = world_from_hole * hole_from_robot
-
-        Args:
-            hole_poses: Dictionary of hole positions in world frame
-
-        Returns:
-            Dictionary of robot navigation targets in world frame
-        """
-        robot_poses = {}
-
-        for idx, hole_pose in hole_poses.items():
-            world_from_hole = Pose3F64(
-                a_from_b=hole_pose.a_from_b,
-                frame_a="world",
-                frame_b="hole",
-                tangent_of_b_in_a=hole_pose.tangent_of_b_in_a,
-            )
-
-            # Inverse of robot_from_tool gives us hole_from_robot
-            hole_from_robot = self.robot_from_tool.inverse()
-            hole_from_robot.frame_a = "hole"
-            hole_from_robot.frame_b = "robot"
-
-            # Compose: world_from_robot = world_from_hole * hole_from_robot
-            world_from_robot = world_from_hole * hole_from_robot
-            robot_poses[idx] = world_from_robot
-
-        return robot_poses
 
     def _infer_yaw_from_path(
         self, north: np.ndarray, west: np.ndarray, last_row_index: int

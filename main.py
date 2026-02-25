@@ -8,21 +8,24 @@ import signal
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
-# Import module system
-from modules.base_module import BaseModule, ModuleContext, ModuleResult
-from modules.registry import get_global_registry
-import modules.xstem  # Auto-registers xstem module
+import modules.xstem  # noqa: F401 — Auto-registers xstem module
 
 # Import platform components
 from amiga_platform.core.blast_pattern import BlastPattern
-from amiga_platform.core.config import XStemConfig
+from amiga_platform.core.config import XStemConfig, load_service_configs
 from amiga_platform.core.service_manager import ServiceManager
-from amiga_platform.core.state_machine import NavigationStateMachine, NavState
+from amiga_platform.core.state_machine import NavigationStateMachine
 from amiga_platform.hardware.filter_utils import check_filter_convergence, imu_wiggle
 from amiga_platform.navigation.navigation_manager import NavigationManager
 from amiga_platform.navigation.path_planner import PathPlanner
 from amiga_platform.vision.vision_system import VisionSystem
+
+# Import module system
+from modules.base_module import BaseModule, ModuleContext
+from modules.registry import get_global_registry
+
 
 def setup_logging() -> Path:
     """Configure logging to both console and file.
@@ -67,41 +70,41 @@ logger = logging.getLogger(__name__)
 class XStemNavigator:
     """Main navigation orchestrator."""
 
-    def __init__(self, config: XStemConfig) -> None:
+    def __init__(self, config: XStemConfig, service_config_path: Path) -> None:
         """Initialize navigator with configuration.
 
         Args:
             config: System configuration
+            service_config_path: Path to service_config.json
         """
         self.config = config
         self.state_machine = NavigationStateMachine()
         self.shutdown_requested = False
 
         # Services
-        self.services = ServiceManager(config.services)
+        self.services = ServiceManager(load_service_configs(service_config_path))
 
         # Components (will be initialized in setup())
-        self.path_planner = None
-        self.nav_manager = None
-        self.vision = None
-        self.module = None
-        self.blast_pattern = None
+        self.path_planner: Optional[PathPlanner] = None
+        self.nav_manager: Optional[NavigationManager] = None
+        self.vision: Optional[VisionSystem] = None
+        self.module: Optional[BaseModule] = None
+        self.blast_pattern: Optional[BlastPattern] = None
 
     async def setup(self) -> None:
         """Initialize all components."""
         logger.info("Initializing XStem navigation system...")
 
-        # Path planner
+        # Path planner (tool offset applied later, after hole detection)
         self.path_planner = PathPlanner(
             self.config.waypoints,
-            self.config.tool,
             self.services.filter,
         )
 
         # Blast pattern (mission state tracking)
         csv_name = Path(str(self.config.waypoints.csv_path)).stem  # Get filename without extension
         self.blast_pattern = BlastPattern(
-            holes=self.path_planner.hole_poses,  # Original hole positions
+            holes=list(self.path_planner.hole_poses.values()),  # Original hole positions
             last_row_waypoint_index=self.config.waypoints.last_row_waypoint_index,
             mission_name=f"mission_{csv_name}",
         )
@@ -118,8 +121,8 @@ class XStemNavigator:
             self.vision = VisionSystem(
                 self.services.oak0,
                 self.services.oak1,
-                self.config.vision.forward_camera.dict(),
-                self.config.vision.downward_camera.dict(),
+                self.config.vision.forward_camera.model_dump(),
+                self.config.vision.downward_camera.model_dump(),
             )
             await self.vision.initialize()
         else:
@@ -127,15 +130,20 @@ class XStemNavigator:
             self.vision = None
 
         # Load module via registry
-        # Map tool.type to module name (temporary until multi-tier config is integrated)
-        tool_type = self.config.tool.type
-        module_name_map = {
-            "stemming": "xstem",
-            "none": "none",
-            "priming": "xprime",  # For future
-        }
-        module_name = module_name_map.get(tool_type, "none")
-        logger.info(f"Loading module: {module_name} (tool type: {tool_type})")
+        module_name = self.config.module
+        logger.info(f"Loading module: {module_name}")
+
+        # Load module config from its own config.yaml
+        module_config_path = Path(__file__).parent / "modules" / module_name / "config.yaml"
+        if module_config_path.exists():
+            import yaml as _yaml
+            with open(module_config_path) as f:
+                _module_yaml = _yaml.safe_load(f)
+            self.module_config = _module_yaml.get("config", {})
+            logger.info(f"Loaded module config from {module_config_path}")
+        else:
+            self.module_config = {}
+            logger.warning(f"No config.yaml found for module '{module_name}'")
 
         registry = get_global_registry()
         try:
@@ -151,7 +159,7 @@ class XStemNavigator:
                 canbus_client=self.services.canbus,
                 filter_client=self.services.filter,
                 vision_system=self.vision if hasattr(self, 'vision') else None,
-                module_config=self.config.tool.dict() if hasattr(self.config.tool, 'dict') else {}
+                module_config=self.module_config,
             )
 
             await self.module.initialize(context)
@@ -180,12 +188,24 @@ class XStemNavigator:
         converged = await check_filter_convergence(self.services.filter)
         if not converged:
             logger.warning("Filter not converged, attempting IMU wiggle...")
-            await imu_wiggle(
+            wiggle_ok = await imu_wiggle(
                 self.services.canbus,
                 self.services.filter,
                 duration_seconds=3.0,
                 max_attempts=self.config.navigation.filter_convergence_retries,
+                stop_event=self.nav_manager.shutdown_event,
             )
+            if not wiggle_ok:
+                if self.nav_manager.shutdown_event.is_set():
+                    logger.error("Wiggle aborted by operator. Awaiting supervisory input.")
+                else:
+                    logger.error(
+                        "Filter did not converge after %d wiggle attempts. "
+                        "Awaiting supervisory input.",
+                        self.config.navigation.filter_convergence_retries,
+                    )
+                # TODO: Implement supervisory input interface (dashboard / remote command)
+                raise SystemExit(1)
 
         logger.info("Initialization complete")
 
@@ -259,14 +279,26 @@ class XStemNavigator:
                         timeout_s=self.config.vision.detection_timeout_s,
                     )
 
+                # Determine hole position (from vision or CSV fallback)
                 if hole_pose:
                     logger.info("Hole detected by vision, using refined position")
                     self.state_machine.hole_detected()
-                    final_target = hole_pose
+                    detected_hole = hole_pose
                 else:
                     logger.info("Using CSV waypoint position (vision disabled or failed)")
                     self.state_machine.hole_not_found()
-                    final_target = wp_pose
+                    detected_hole = wp_pose
+
+                # Apply module's tool offset to get robot navigation target
+                # This positions the robot so the tool (dipbob/chute) is over the hole
+                tool_offset = self.module_config.get("tool_offset", {})
+                tool_offset_config = {
+                    "offset_x": tool_offset.get("dipbob_x", 0.0),
+                    "offset_y": tool_offset.get("dipbob_y", 0.0),
+                    "offset_z": tool_offset.get("dipbob_z", 0.0),
+                }
+                final_target = self.path_planner.apply_tool_offset(detected_hole, tool_offset_config)
+                logger.info("Applied tool offset to get robot navigation target")
 
                 # State: REFINING / EXECUTING
                 self.state_machine.path_refined()
@@ -300,7 +332,7 @@ class XStemNavigator:
                     canbus_client=self.services.canbus,
                     filter_client=self.services.filter,
                     vision_system=self.vision if hasattr(self, 'vision') else None,
-                    module_config=self.config.tool.dict() if hasattr(self.config.tool, 'dict') else {}
+                    module_config=self.module_config,
                 )
 
                 # Execute module
@@ -325,6 +357,7 @@ class XStemNavigator:
         finally:
             await self.shutdown()
 
+# TODO: Fix up and clarify function. Row end not dependent on number of segments
     async def _execute_row_end_maneuver(self) -> None:
         """Execute 4-segment row-end turn."""
         logger.info("Executing row-end maneuver (4 segments)...")
@@ -373,7 +406,7 @@ def signal_handler(navigator: XStemNavigator):
         Signal handler function
     """
 
-    def handler(signum, frame):
+    def handler(signum, _frame):
         logger.info(f"Received signal {signum} - requesting immediate shutdown")
         navigator.shutdown_requested = True
         # Trigger immediate track cancellation
@@ -383,11 +416,12 @@ def signal_handler(navigator: XStemNavigator):
     return handler
 
 
-async def main(config_path: Path) -> None:
+async def main(config_path: Path, service_config_path: Path) -> None:
     """Entry point.
 
     Args:
-        config_path: Path to configuration YAML file
+        config_path: Path to navigation_config.yaml
+        service_config_path: Path to service_config.json
     """
     logger.info(f"Logging to: {log_file}")
 
@@ -396,7 +430,7 @@ async def main(config_path: Path) -> None:
     logger.info(f"Loaded configuration from {config_path}")
 
     # Create navigator
-    navigator = XStemNavigator(config)
+    navigator = XStemNavigator(config, service_config_path)
 
     # Setup signal handlers
     signal.signal(signal.SIGINT, signal_handler(navigator))
@@ -412,13 +446,19 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config",
         type=Path,
-        default=Path.home() / "Amiga" / "xstem" / "config" / "navigation_config.yaml",
-        help="Path to configuration file",
+        default=Path.home() / "Amiga" / "X-Platform" / "config" / "navigation_config.yaml",
+        help="Path to navigation config YAML file",
+    )
+    parser.add_argument(
+        "--service-config",
+        type=Path,
+        default=Path.home() / "Amiga" / "X-Platform" / "config" / "service_config.json",
+        help="Path to service config JSON file",
     )
     args = parser.parse_args()
 
     try:
-        asyncio.run(main(args.config))
+        asyncio.run(main(args.config, args.service_config))
     except KeyboardInterrupt:
         logger.info("Interrupted by user")
     except Exception as e:

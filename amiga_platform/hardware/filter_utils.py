@@ -101,6 +101,7 @@ async def imu_wiggle(
     angular_velocity: float = 0.3,
     check_convergence: bool = True,
     max_attempts: int = 3,
+    stop_event: asyncio.Event | None = None,
 ) -> bool:
     """Wiggle the robot back and forth to help the UKF filter converge.
 
@@ -116,22 +117,29 @@ async def imu_wiggle(
         angular_velocity: Angular velocity for wiggling (rad/s, default 0.3)
         check_convergence: Whether to check if filter converged after wiggling
         max_attempts: Maximum number of wiggle attempts before giving up
+        stop_event: Optional asyncio.Event; when set, aborts the wiggle immediately
 
     Returns:
         True if filter converged (or if not checking), False if still diverged after max attempts
+        or if aborted via stop_event
     """
     logger.info("Starting IMU wiggle to help filter converge...")
 
     # Check initial convergence state
-    initial_converged = False
     if filter_client and check_convergence:
-        initial_converged = await check_filter_convergence(filter_client)
-        if initial_converged:
+        if await check_filter_convergence(filter_client):
             logger.info("Filter already converged, no wiggle needed")
             return True
 
+    stop_twist = Twist2d(linear_velocity_x=0.0, angular_velocity=0.0)
+
     attempt = 0
     while attempt < max_attempts:
+        if stop_event and stop_event.is_set():
+            logger.info("Wiggle aborted by shutdown signal")
+            await canbus_client.request_reply("/twist", stop_twist)
+            return False
+
         attempt += 1
         logger.info(
             f"Wiggle attempt {attempt}/{max_attempts} - "
@@ -147,21 +155,30 @@ async def imu_wiggle(
             -angular_velocity,
         ]
 
+        interrupted = False
         for ang_vel in directions:
-            # Send twist command for this direction
             twist = Twist2d(linear_velocity_x=0.0, angular_velocity=ang_vel)
 
             start_time = asyncio.get_event_loop().time()
             end_time = start_time + wiggle_cycle_duration
 
-            # Hold this direction for the cycle duration
             while asyncio.get_event_loop().time() < end_time:
+                if stop_event and stop_event.is_set():
+                    interrupted = True
+                    break
                 await canbus_client.request_reply("/twist", twist)
                 await asyncio.sleep(0.05)  # Send at 20 Hz
 
-        # Stop the robot
-        stop_twist = Twist2d(linear_velocity_x=0.0, angular_velocity=0.0)
+            if interrupted:
+                break
+
+        # Always stop the robot before returning or checking convergence
         await canbus_client.request_reply("/twist", stop_twist)
+
+        if interrupted:
+            logger.info("Wiggle aborted by shutdown signal, robot stopped")
+            return False
+
         logger.info("Wiggle complete, robot stopped")
 
         # Wait a moment for filter to settle

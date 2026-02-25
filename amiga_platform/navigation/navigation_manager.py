@@ -47,6 +47,9 @@ class NavigationManager:
         # Thread safety
         self._lock = asyncio.Lock()
 
+        # Track active state — prevents double-cancel on shutdown
+        self._track_active: bool = False
+
         # Monitoring task
         self.monitor_task: asyncio.Task | None = None
         self.shutdown_requested = False
@@ -123,6 +126,7 @@ class NavigationManager:
         async with self._lock:
             req = TrackFollowRequest(track=track)
             await self.track_follower.request_reply("/set_track", req)
+            self._track_active = True
 
         await asyncio.sleep(1.0)  # Allow track to load
 
@@ -162,6 +166,8 @@ class NavigationManager:
             await self.cancel_track()
             return False
 
+        self._track_active = False
+
         success = self.track_complete.is_set()
         if success:
             logger.info("Track execution completed successfully")
@@ -173,6 +179,9 @@ class NavigationManager:
     async def cancel_track(self) -> None:
         """Cancel current track execution."""
         async with self._lock:
+            if not self._track_active:
+                return
+            self._track_active = False
             try:
                 await self.track_follower.request_reply("/cancel", Empty())
                 logger.info("Track cancelled")

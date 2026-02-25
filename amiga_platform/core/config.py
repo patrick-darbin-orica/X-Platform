@@ -5,12 +5,13 @@ while also supporting the new multi-tier platform/mission/module configs.
 """
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 from typing import Dict, Literal, Optional
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -38,24 +39,6 @@ class WaypointConfig(BaseModel):
 
         arbitrary_types_allowed = True
 
-
-class ToolConfig(BaseModel):
-    """Tool/implement configuration."""
-
-    type: str = "stemming"
-    offset_x: float = 0.25  # meters forward
-    offset_y: float = 0.0
-    offset_z: float = 0.0
-
-    # Dipbob settings
-    dipbob_can_signal: str = "dipbob_deploy"
-    dipbob_ack_timeout_s: float = 5.0
-
-    # Chute settings
-    chute_actuator_id: int = 0
-    chute_open_duration_s: float = 0.2
-    chute_close_duration_s: float = 0.3
-    chute_rate_hz: float = 10.0
 
 
 class CameraConfig(BaseModel):
@@ -104,27 +87,56 @@ class ThresholdsConfig(BaseModel):
     alignment_tolerance_m: float = 0.02
 
 
-class XStemConfig(BaseModel):
-    """Master configuration (v1 - backward compatible)."""
+def load_service_configs(path: Path) -> Dict[str, ServiceConfig]:
+    """Load service configurations from a farm-ng style JSON file.
 
-    services: Dict[str, ServiceConfig]
+    The JSON file uses a ``configs`` list (matching the amiga-adk format).
+    Entries with no ``port`` (e.g. multi_subscriber) are skipped because they
+    are not EventService endpoints we connect to directly.
+
+    Args:
+        path: Path to service_config.json
+
+    Returns:
+        Dict mapping service key names to ServiceConfig instances.
+        Oak services are keyed by ``oak0`` / ``oak1`` to match ServiceManager.
+    """
+    logger.info(f"Loading service config from {path}")
+    with open(path) as f:
+        data = json.load(f)
+
+    configs: Dict[str, ServiceConfig] = {}
+    for entry in data.get("configs", []):
+        if "port" not in entry:
+            continue  # skip subscription-only entries like multi_subscriber
+        name = entry["name"]
+        # Normalise "oak/0" -> "oak0" etc. for dict key
+        key = name.replace("/", "")
+        configs[key] = ServiceConfig(name=name, host=entry["host"], port=entry["port"])
+
+    return configs
+
+
+class XStemConfig(BaseModel):
+    """Platform configuration."""
+
     waypoints: WaypointConfig
-    tool: ToolConfig
+    module: str = "none"
     vision: VisionConfig
     navigation: NavigationConfig
     thresholds: ThresholdsConfig
 
     @classmethod
     def from_yaml(cls, path: Path) -> XStemConfig:
-        """Load configuration from YAML file (v1 format).
+        """Load configuration from YAML file.
 
         Args:
-            path: Path to v1-style navigation_config.yaml
+            path: Path to navigation_config.yaml
 
         Returns:
             Validated configuration
         """
-        logger.info(f"Loading v1 config from {path}")
+        logger.info(f"Loading config from {path}")
         with open(path) as f:
             data = yaml.safe_load(f)
         return cls(**data)
@@ -158,9 +170,6 @@ class XStemConfig(BaseModel):
         mission = loader.get_mission_config()
         module = loader.get_module_config()
 
-        # Map v2 config to v1 structure
-        services = {name: ServiceConfig(**svc.dict()) for name, svc in platform.services.items()}
-
         waypoints = WaypointConfig(
             csv_path=mission.blast_pattern.csv_path,
             coordinate_system=mission.blast_pattern.coordinate_system,
@@ -169,27 +178,6 @@ class XStemConfig(BaseModel):
             row_spacing_m=mission.blast_pattern.row_spacing_m,
             headland_buffer_m=platform.navigation.headland_buffer_m,
         )
-
-        # Tool config from module (if present)
-        if module and module.module_type == "stemming":
-            tool_cfg = module.config.get("tool_offset", {})
-            dipbob_cfg = module.config.get("dipbob", {})
-            chute_cfg = module.config.get("chute", {})
-
-            tool = ToolConfig(
-                type="stemming",
-                offset_x=tool_cfg.get("dipbob_x", 0.25),
-                offset_y=tool_cfg.get("dipbob_y", 0.0),
-                offset_z=tool_cfg.get("dipbob_z", 0.0),
-                dipbob_ack_timeout_s=dipbob_cfg.get("ack_timeout_s", 5.0),
-                chute_actuator_id=chute_cfg.get("actuator_id", 0),
-                chute_open_duration_s=chute_cfg.get("open_duration_s", 0.2),
-                chute_close_duration_s=chute_cfg.get("close_duration_s", 0.3),
-                chute_rate_hz=chute_cfg.get("control_rate_hz", 10.0),
-            )
-        else:
-            # Default tool config (no module)
-            tool = ToolConfig()
 
         vision = VisionConfig(
             enabled=platform.vision.enabled,
@@ -227,14 +215,12 @@ class XStemConfig(BaseModel):
         thresholds = ThresholdsConfig(
             positioning_accuracy_m=platform.navigation.positioning_tolerance_m,
             heading_accuracy_deg=platform.navigation.heading_tolerance_deg,
-            alignment_tolerance_m=module.config.get("alignment", {}).get("dipbob_tolerance_m", 0.02) if module else 0.02,
         )
 
         logger.info("Successfully converted v2 configs to v1 format")
         return cls(
-            services=services,
             waypoints=waypoints,
-            tool=tool,
+            module=module.module_name if module else "none",
             vision=vision,
             navigation=navigation,
             thresholds=thresholds,

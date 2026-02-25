@@ -15,51 +15,45 @@ from utils.track_builder import TrackBuilder
 from .coordinate_transforms import CoordinateTransforms
 
 if TYPE_CHECKING:
-    from amiga_platform.core.config import NavigationConfig, ToolConfig, WaypointConfig
+    from amiga_platform.core.config import NavigationConfig, WaypointConfig
     from farm_ng.core.event_client import EventClient
 
 logger = logging.getLogger(__name__)
 
 
 class PathPlanner:
-    """Manages waypoint sequence and track segment generation."""
+    """Manages waypoint sequence and track segment generation.
+
+    The PathPlanner loads hole positions from CSV and provides navigation targets.
+    Tool offsets are NOT applied at initialization - they are applied later when
+    planning the final approach after the hole has been detected.
+    """
 
     def __init__(
         self,
         waypoint_config: WaypointConfig,
-        tool_config: ToolConfig,
         filter_client: EventClient,
     ) -> None:
         """Initialize path planner.
 
         Args:
             waypoint_config: Waypoint loading configuration
-            tool_config: Tool offset configuration
             filter_client: Filter service client for pose queries
         """
         self.config = waypoint_config
         self.filter_client = filter_client
 
-        # Coordinate transformations
-        self.transforms = CoordinateTransforms(
-            {
-                "offset_x": tool_config.offset_x,
-                "offset_y": tool_config.offset_y,
-                "offset_z": tool_config.offset_z,
-            }
-        )
+        # Coordinate transformations (no tool offset at init)
+        self.transforms = CoordinateTransforms()
 
-        # Load waypoints
-        hole_poses = self.transforms.load_waypoints_from_csv(
+        # Load waypoints (raw hole positions, no tool offset)
+        self.hole_poses = self.transforms.load_waypoints_from_csv(
             Path(waypoint_config.csv_path).expanduser(),
             waypoint_config.last_row_waypoint_index,
         )
 
-        # Store original hole positions (for vision search zones)
-        self.hole_poses = hole_poses.copy()
-
-        # Transform to robot navigation targets
-        self.waypoints = self.transforms.transform_holes_to_robot_targets(hole_poses)
+        # Waypoints are the raw hole positions (tool offset applied later)
+        self.waypoints = self.hole_poses
 
         # Navigation state
         self.current_index = 0
@@ -102,6 +96,22 @@ class PathPlanner:
             Hole position pose or None if not found
         """
         return self.hole_poses.get(index)
+
+    def apply_tool_offset(self, hole_pose: Pose3F64, tool_config: dict) -> Pose3F64:
+        """Apply module's tool offset to hole position for final approach.
+
+        After the robot has detected a hole (via vision or CSV), this method
+        transforms the hole position to the robot navigation target, accounting
+        for where the tool is mounted on the robot.
+
+        Args:
+            hole_pose: Detected hole position in world frame
+            tool_config: Module's tool configuration with offset_x, offset_y, offset_z
+
+        Returns:
+            Robot navigation target (where robot should go so tool is over hole)
+        """
+        return self.transforms.apply_tool_offset(hole_pose, tool_config)
 
     async def plan_segment(
         self, start: Pose3F64, goal: Pose3F64, spacing: float = 0.5
