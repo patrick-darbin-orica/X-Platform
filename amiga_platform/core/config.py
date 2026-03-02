@@ -28,7 +28,12 @@ class WaypointConfig(BaseModel):
     """Waypoint loading configuration."""
 
     csv_path: Path
-    coordinate_system: Literal["ENU", "NWU"] = "ENU"
+    coordinate_system: Literal["ENU", "NWU", "LATLONG"] = "ENU"
+    # Reference point for LATLONG coordinate system.
+    # Set to the base station (e.g. Emlid RS2+) GPS coordinates so
+    # converted waypoints align with the filter's world frame origin.
+    reference_lat: Optional[float] = None
+    reference_lon: Optional[float] = None
     last_row_waypoint_index: int
     turn_direction: Literal["left", "right"] = "left"
     row_spacing_m: float = 6.0
@@ -38,7 +43,6 @@ class WaypointConfig(BaseModel):
         """Pydantic config."""
 
         arbitrary_types_allowed = True
-
 
 
 class CameraConfig(BaseModel):

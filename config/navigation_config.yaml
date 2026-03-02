@@ -1,8 +1,24 @@
 # XStem Navigation System Configuration
 
 waypoints:
-  csv_path: "~/Amiga/amiga-adk/py/examples/waypoint_navigation/surveyed-waypoints/kktcRearRoad.csv"
+  csv_path: "~/Amiga/X-Platform/paths/kktcRearRoad.csv"
+
+  # Coordinate system of the CSV file. One of:
+  #   "ENU"     - CSV has dx (East) and dy (North) columns in metres (default)
+  #   "NWU"     - CSV has north and west columns in metres
+  #   "LATLONG" - CSV has lat and lon columns in WGS-84 decimal degrees.
+  #               Requires reference_lat/reference_lon to be set below, OR
+  #               omit them to use the first CSV row as the local origin.
   coordinate_system: "ENU"
+
+  # Reference point for LATLONG coordinate system (required).
+  # Set to the base station (e.g. Emlid RS2+) GPS coordinates.
+  # The filter's world frame origin is defined by the base station,
+  # so all converted waypoints will align with the filter's pose output.
+  # If omitted, the first CSV row is used as the origin (less reliable).
+  # reference_lat: 35.123456   # decimal degrees
+  # reference_lon: 33.456789   # decimal degrees
+
   last_row_waypoint_index: 3
   turn_direction: "left"
   row_spacing_m: 3.0

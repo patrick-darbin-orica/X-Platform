@@ -40,7 +40,7 @@ git checkout feature/existing-branch
 git add <files>
 git commit  # Template auto-loads
 
-# Pull updates regularly (every 1-2 hours)
+# Pull updates regularly
 git pull --rebase origin main
 
 # Run tests before pushing

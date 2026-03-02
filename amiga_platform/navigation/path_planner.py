@@ -50,6 +50,9 @@ class PathPlanner:
         self.hole_poses = self.transforms.load_waypoints_from_csv(
             Path(waypoint_config.csv_path).expanduser(),
             waypoint_config.last_row_waypoint_index,
+            coordinate_system=waypoint_config.coordinate_system,
+            reference_lat=waypoint_config.reference_lat,
+            reference_lon=waypoint_config.reference_lon,
         )
 
         # Waypoints are the raw hole positions (tool offset applied later)
