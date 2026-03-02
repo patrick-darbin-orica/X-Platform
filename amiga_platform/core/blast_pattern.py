@@ -223,9 +223,11 @@ class BlastPattern:
         Returns:
             True if this is the last hole in a row
         """
-        # Check if index matches last_row_index pattern
-        # e.g., if last_row_index=3, then 3, 7, 11, 15... are echelon ends
-        return (index + 1) % (self.last_row_index + 1) == 0
+        # Check if index is the last waypoint in a row.
+        # last_row_index is the number of waypoints per row.
+        # e.g., if last_row_index=3, rows are [0,1,2], [3,4,5], ...
+        # so echelon ends are at indices 2, 5, 8, ...
+        return (index + 1) % self.last_row_index == 0
 
     def get_completion_stats(self) -> Dict[str, int]:
         """Get completion statistics.

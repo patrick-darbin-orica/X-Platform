@@ -236,7 +236,10 @@ class CoordinateTransforms:
             # Backward difference for last waypoint
             yaw[-1] = np.arctan2(west[-1] - west[-2], north[-1] - north[-2])
 
-            # Special: last row waypoint uses backward (approach direction)
+            # Special: last waypoint in each row uses backward diff so the
+            # robot faces the row approach direction (not toward the next-row
+            # waypoint).  idx is 0-based: last_row_index is the per-row count
+            # (1-based), so subtract 1.
             if last_row_index > 0 and last_row_index <= len(north):
                 idx = last_row_index - 1
                 if idx > 0:

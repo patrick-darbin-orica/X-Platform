@@ -240,13 +240,6 @@ class XStemNavigator:
                 # State: PLANNING
                 self.state_machine.waypoint_planned()
 
-                # Check for row-end maneuver (echelon transition)
-                if self.blast_pattern.is_echelon_end(wp_index):
-                    logger.info("Echelon end detected, executing U-turn maneuver")
-                    await self._execute_row_end_maneuver()
-                    self.blast_pattern.mark_completed(wp_index)  # Mark as completed after U-turn
-                    continue
-
                 # Plan approach segment (stop before waypoint for vision)
                 approach_track = await self.path_planner.plan_approach_segment(
                     wp_pose,
@@ -343,6 +336,14 @@ class XStemNavigator:
                     logger.info(f"✓ Hole {wp_index} completed successfully")
                     self.blast_pattern.mark_completed(wp_index, measurements=result.measurements)
                     self.state_machine.tool_complete()
+
+                    # Execute row-end maneuver after servicing the last hole in a row
+                    if self.blast_pattern.is_echelon_end(wp_index):
+                        logger.info("Echelon end detected, executing U-turn maneuver")
+                        uturn_ok = await self._execute_row_end_maneuver()
+                        if not uturn_ok:
+                            logger.error("U-turn failed — stopping mission")
+                            break
                 else:
                     logger.error(f"✗ Module execution failed at hole {wp_index}: {result.error}")
                     self.blast_pattern.mark_failed(wp_index, error=result.error or "Unknown error")
@@ -357,9 +358,12 @@ class XStemNavigator:
         finally:
             await self.shutdown()
 
-# TODO: Fix up and clarify function. Row end not dependent on number of segments
-    async def _execute_row_end_maneuver(self) -> None:
-        """Execute 4-segment row-end turn."""
+    async def _execute_row_end_maneuver(self) -> bool:
+        """Execute 4-segment row-end turn.
+
+        Returns:
+            True if all segments completed successfully
+        """
         logger.info("Executing row-end maneuver (4 segments)...")
 
         for segment_idx in range(1, 5):
@@ -372,10 +376,11 @@ class XStemNavigator:
 
             if not success:
                 logger.error(f"Row-end segment {segment_idx} failed")
-                # TODO: Implement retry logic
-                break
+                self.path_planner.reset_row_end_state()
+                return False
 
         logger.info("Row-end maneuver complete")
+        return True
 
     async def shutdown(self) -> None:
         """Clean shutdown."""

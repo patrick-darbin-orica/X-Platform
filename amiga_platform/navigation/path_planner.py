@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 from farm_ng.track.track_pb2 import Track
-from farm_ng_core_pybind import Isometry3F64, Pose3F64
+from farm_ng_core_pybind import Isometry3F64, Pose3F64, Rotation3F64
 from google.protobuf.empty_pb2 import Empty
 
 from utils.track_builder import TrackBuilder
@@ -171,16 +171,22 @@ class PathPlanner:
         approach_x = curr_x + dx * scale
         approach_y = curr_y + dy * scale
 
+        # Use travel direction heading so the track aligns with the path
+        travel_heading = float(np.arctan2(dy, dx))
         approach_pose = Pose3F64(
             a_from_b=Isometry3F64(
                 [approach_x, approach_y, 0.0],
-                current.a_from_b.rotation,  # Keep current heading
+                Rotation3F64.Rz(travel_heading),
             ),
             frame_a="world",
             frame_b=f"approach_{self.current_index}",
         )
 
         return await self.plan_segment(current, approach_pose)
+
+    def reset_row_end_state(self) -> None:
+        """Reset row-end maneuver state (e.g. after failure)."""
+        self.row_end_segment_index = 1
 
     def is_row_end(self) -> bool:
         """Check if current waypoint is last in row.
