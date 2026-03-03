@@ -36,6 +36,7 @@ class WaypointConfig(BaseModel):
     reference_lon: Optional[float] = None
     last_row_waypoint_index: int
     turn_direction: Literal["left", "right"] = "left"
+    turn_type: Literal["pi_turn", "turn_in_place"] = "pi_turn"
     row_spacing_m: float = 6.0
     headland_buffer_m: float = 2.0
 

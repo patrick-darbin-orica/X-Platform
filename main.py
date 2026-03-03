@@ -10,9 +10,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-import modules.xprime  # noqa: F401 — Auto-registers xprime module
-import modules.xstem  # noqa: F401 — Auto-registers xstem module
-
 # Import platform components
 from amiga_platform.core.blast_pattern import BlastPattern
 from amiga_platform.core.config import PlatformConfig, load_service_configs
@@ -130,8 +127,11 @@ class XModuleNavigator:
             logger.info("Vision system disabled")
             self.vision = None
 
-        # Load module via registry
+        # Dynamically import only the selected module (auto-registers it)
         module_name = self.config.module
+        if module_name != "none":
+            import importlib
+            importlib.import_module(f"modules.{module_name}")
         logger.info(f"Loading module: {module_name}")
 
         # Load module config from its own config.yaml
@@ -360,19 +360,20 @@ class XModuleNavigator:
             await self.shutdown()
 
     async def _execute_row_end_maneuver(self) -> bool:
-        """Execute 4-segment row-end turn.
+        """Execute row-end turn maneuver.
 
         Returns:
             True if all segments completed successfully
         """
-        logger.info("Executing row-end maneuver (4 segments)...")
+        total = self.path_planner.row_end_total_segments
+        logger.info(f"Executing row-end maneuver ({total} segments)...")
 
-        for segment_idx in range(1, 5):
+        for segment_idx in range(1, total + 1):
             track = await self.path_planner.plan_row_end_maneuver()
             if track is None:
                 break
 
-            logger.info(f"Row-end segment {segment_idx}/4")
+            logger.info(f"Row-end segment {segment_idx}/{total}")
             success = await self.nav_manager.execute_track(track)
 
             if not success:

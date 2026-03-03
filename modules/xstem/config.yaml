@@ -5,7 +5,7 @@ module_name: "xstem"
 module_type: "stemming"
 
 config:
-  # Tool Offset Configuration
+  # Tool Offset Configuration (Dipper)
   # Offset from robot center to dipbob position
   tool_offset:
     x: 0.25                          # meters forward from robot center

@@ -21,6 +21,10 @@ waypoints:
 
   last_row_waypoint_index: 3
   turn_direction: "left"
+  # Turn type for row-end maneuver:
+  #   "pi_turn"       - drive forward then 180° arc (2 segments)
+  #   "turn_in_place" - drive forward, 90° turn, lateral, 90° turn (4 segments)
+  turn_type: "pi_turn"
   row_spacing_m: 3.0
   headland_buffer_m: 3.0
 

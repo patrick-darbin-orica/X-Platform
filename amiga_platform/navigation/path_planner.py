@@ -196,41 +196,73 @@ class PathPlanner:
         """
         return self.current_index == self.config.last_row_waypoint_index
 
+    @property
+    def row_end_total_segments(self) -> int:
+        """Total segments in the current row-end maneuver type."""
+        if self.config.turn_type == "pi_turn":
+            return 2  # straight + arc
+        return 4  # straight + turn + straight + turn
+
     async def plan_row_end_maneuver(self) -> Track | None:
-        """Create 4-segment U-turn for row end.
+        """Create next segment of row-end maneuver.
+
+        Supports two turn types (configured via ``turn_type``):
+        - ``pi_turn``: 2 segments — drive forward, then 180° arc of
+          radius ``row_spacing_m / 2``.
+        - ``turn_in_place``: 4 segments — drive forward, 90° turn,
+          lateral drive, 90° turn.
 
         Returns:
-            Next segment in row-end maneuver, or None if complete
+            Next track segment, or None if maneuver is complete.
         """
-        if self.row_end_segment_index > 4:
+        if self.row_end_segment_index > self.row_end_total_segments:
             self.row_end_segment_index = 1  # Reset for next row
             return None
 
+        turn_sign = 1 if self.config.turn_direction == "left" else -1
         current = await self.get_current_pose()
         builder = TrackBuilder(start=current)
 
-        if self.row_end_segment_index == 1:
-            # Drive into headland
-            builder.create_straight_segment(
-                "row_end_1", distance=self.config.headland_buffer_m, spacing=0.5
-            )
-        elif self.row_end_segment_index == 2:
-            # Turn 90°
-            angle = np.radians(90) * (
-                1 if self.config.turn_direction == "left" else -1
-            )
-            builder.create_turn_segment("row_end_2", angle=angle, spacing=0.15)
-        elif self.row_end_segment_index == 3:
-            # Lateral movement
-            builder.create_straight_segment(
-                "row_end_3", distance=self.config.row_spacing_m, spacing=0.5
-            )
-        elif self.row_end_segment_index == 4:
-            # Turn 90° again
-            angle = np.radians(90) * (
-                1 if self.config.turn_direction == "left" else -1
-            )
-            builder.create_turn_segment("row_end_4", angle=angle, spacing=0.15)
+        if self.config.turn_type == "pi_turn":
+            if self.row_end_segment_index == 1:
+                # Drive half the headland buffer before the arc
+                builder.create_straight_segment(
+                    "row_end_1",
+                    distance=self.config.headland_buffer_m / 2.0,
+                    spacing=0.5,
+                )
+            elif self.row_end_segment_index == 2:
+                # 180° arc — radius = row_spacing / 2 puts the robot
+                # exactly one row_spacing across when the arc completes.
+                radius = self.config.row_spacing_m / 2.0
+                angle = np.pi * turn_sign
+                builder.create_arc_segment(
+                    "row_end_2", radius=radius, angle=angle, spacing=0.1
+                )
+        else:
+            # turn_in_place: original 4-segment maneuver
+            if self.row_end_segment_index == 1:
+                builder.create_straight_segment(
+                    "row_end_1",
+                    distance=self.config.headland_buffer_m,
+                    spacing=0.5,
+                )
+            elif self.row_end_segment_index == 2:
+                angle = np.radians(90) * turn_sign
+                builder.create_turn_segment(
+                    "row_end_2", angle=angle, spacing=0.15
+                )
+            elif self.row_end_segment_index == 3:
+                builder.create_straight_segment(
+                    "row_end_3",
+                    distance=self.config.row_spacing_m,
+                    spacing=0.5,
+                )
+            elif self.row_end_segment_index == 4:
+                angle = np.radians(90) * turn_sign
+                builder.create_turn_segment(
+                    "row_end_4", angle=angle, spacing=0.15
+                )
 
         self.row_end_segment_index += 1
         return builder.track
