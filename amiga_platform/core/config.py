@@ -121,7 +121,7 @@ def load_service_configs(path: Path) -> Dict[str, ServiceConfig]:
     return configs
 
 
-class XStemConfig(BaseModel):
+class PlatformConfig(BaseModel):
     """Platform configuration."""
 
     waypoints: WaypointConfig
@@ -131,7 +131,7 @@ class XStemConfig(BaseModel):
     thresholds: ThresholdsConfig
 
     @classmethod
-    def from_yaml(cls, path: Path) -> XStemConfig:
+    def from_yaml(cls, path: Path) -> PlatformConfig:
         """Load configuration from YAML file.
 
         Args:
@@ -151,11 +151,11 @@ class XStemConfig(BaseModel):
         platform_config_path: Path,
         mission_config_path: Path,
         module_config_path: Optional[Path] = None,
-    ) -> XStemConfig:
+    ) -> PlatformConfig:
         """Load configuration from v2 multi-tier configs.
 
         This method bridges the new platform/mission/module config system
-        with the v1 XStemConfig format for backward compatibility.
+        with the v1 PlatformConfig format for backward compatibility.
 
         Args:
             platform_config_path: Path to platform config YAML

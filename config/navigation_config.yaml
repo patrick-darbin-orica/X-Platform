@@ -24,7 +24,7 @@ waypoints:
   row_spacing_m: 3.0
   headland_buffer_m: 3.0
 
-module: xstem
+module: xprime
 
 vision:
   enabled: false

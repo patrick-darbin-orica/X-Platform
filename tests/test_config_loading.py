@@ -2,7 +2,7 @@
 """Test script for multi-tier configuration loading."""
 from pathlib import Path
 
-from amiga_platform.core.config import XStemConfig
+from amiga_platform.core.config import PlatformConfig
 
 # Test v2 multi-tier config loading
 print("=" * 60)
@@ -13,7 +13,7 @@ try:
     platform_path = Path("config/platform_config.yaml")
     mission_path = Path("config/mission_config.yaml")
 
-    config = XStemConfig.from_multi_tier(platform_path, mission_path)
+    config = PlatformConfig.from_multi_tier(platform_path, mission_path)
 
     print("\n✓ Configuration loaded successfully!")
     print(f"\nServices configured: {list(config.services.keys())}")
@@ -40,7 +40,7 @@ print("=" * 60)
 try:
     v1_path = Path("config/navigation_config.yaml")
     if v1_path.exists():
-        v1_config = XStemConfig.from_yaml(v1_path)
+        v1_config = PlatformConfig.from_yaml(v1_path)
         print("\n✓ v1 config loaded successfully!")
         print(f"Services: {list(v1_config.services.keys())}")
     else:

@@ -1,4 +1,4 @@
-"""XStem Navigation System - Main Entry Point."""
+"""X-Platform Navigation System - Main Entry Point."""
 from __future__ import annotations
 
 import argparse
@@ -10,11 +10,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+import modules.xprime  # noqa: F401 — Auto-registers xprime module
 import modules.xstem  # noqa: F401 — Auto-registers xstem module
 
 # Import platform components
 from amiga_platform.core.blast_pattern import BlastPattern
-from amiga_platform.core.config import XStemConfig, load_service_configs
+from amiga_platform.core.config import PlatformConfig, load_service_configs
 from amiga_platform.core.service_manager import ServiceManager
 from amiga_platform.core.state_machine import NavigationStateMachine
 from amiga_platform.hardware.filter_utils import check_filter_convergence, imu_wiggle
@@ -67,10 +68,10 @@ log_file = setup_logging()
 logger = logging.getLogger(__name__)
 
 
-class XStemNavigator:
+class XModuleNavigator:
     """Main navigation orchestrator."""
 
-    def __init__(self, config: XStemConfig, service_config_path: Path) -> None:
+    def __init__(self, config: PlatformConfig, service_config_path: Path) -> None:
         """Initialize navigator with configuration.
 
         Args:
@@ -93,7 +94,7 @@ class XStemNavigator:
 
     async def setup(self) -> None:
         """Initialize all components."""
-        logger.info("Initializing XStem navigation system...")
+        logger.info("Initializing navigation system...")
 
         # Path planner (tool offset applied later, after hole detection)
         self.path_planner = PathPlanner(
@@ -283,12 +284,12 @@ class XStemNavigator:
                     detected_hole = wp_pose
 
                 # Apply module's tool offset to get robot navigation target
-                # This positions the robot so the tool (dipbob/chute) is over the hole
+                # This positions the robot so the module's tool is over the hole
                 tool_offset = self.module_config.get("tool_offset", {})
                 tool_offset_config = {
-                    "offset_x": tool_offset.get("dipbob_x", 0.0),
-                    "offset_y": tool_offset.get("dipbob_y", 0.0),
-                    "offset_z": tool_offset.get("dipbob_z", 0.0),
+                    "offset_x": tool_offset.get("x", 0.0),
+                    "offset_y": tool_offset.get("y", 0.0),
+                    "offset_z": tool_offset.get("z", 0.0),
                 }
                 final_target = self.path_planner.apply_tool_offset(detected_hole, tool_offset_config)
                 logger.info("Applied tool offset to get robot navigation target")
@@ -401,7 +402,7 @@ class XStemNavigator:
         logger.info("Shutdown complete")
 
 
-def signal_handler(navigator: XStemNavigator):
+def signal_handler(navigator: XModuleNavigator):
     """Create signal handler for graceful shutdown.
 
     Args:
@@ -431,11 +432,11 @@ async def main(config_path: Path, service_config_path: Path) -> None:
     logger.info(f"Logging to: {log_file}")
 
     # Load configuration
-    config = XStemConfig.from_yaml(config_path)
+    config = PlatformConfig.from_yaml(config_path)
     logger.info(f"Loaded configuration from {config_path}")
 
     # Create navigator
-    navigator = XStemNavigator(config, service_config_path)
+    navigator = XModuleNavigator(config, service_config_path)
 
     # Setup signal handlers
     signal.signal(signal.SIGINT, signal_handler(navigator))
@@ -447,7 +448,7 @@ async def main(config_path: Path, service_config_path: Path) -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="XStem Navigation System")
+    parser = argparse.ArgumentParser(description="X-Platform Navigation System")
     parser.add_argument(
         "--config",
         type=Path,

@@ -104,7 +104,7 @@ class ThresholdsConfig(BaseModel):
     alignment_tolerance_m: float = 0.02
 
 
-class XStemConfig(BaseModel):
+class PlatformConfig(BaseModel):
     """Master configuration (v1 - backward compatible)."""
 
     services: dict[str, ServiceConfig]
@@ -115,7 +115,7 @@ class XStemConfig(BaseModel):
     thresholds: ThresholdsConfig
 
     @classmethod
-    def from_yaml(cls, path: Path) -> XStemConfig:
+    def from_yaml(cls, path: Path) -> PlatformConfig:
         """Load configuration from YAML file (v1 format).
 
         Args:
@@ -135,11 +135,11 @@ class XStemConfig(BaseModel):
         platform_config_path: Path,
         mission_config_path: Path,
         module_config_path: Optional[Path] = None,
-    ) -> XStemConfig:
+    ) -> PlatformConfig:
         """Load configuration from v2 multi-tier configs.
 
         This method bridges the new platform/mission/module config system
-        with the v1 XStemConfig format for backward compatibility.
+        with the v1 PlatformConfig format for backward compatibility.
 
         Args:
             platform_config_path: Path to platform config YAML

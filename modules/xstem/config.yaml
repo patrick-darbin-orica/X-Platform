@@ -8,9 +8,9 @@ config:
   # Tool Offset Configuration
   # Offset from robot center to dipbob position
   tool_offset:
-    dipbob_x: 0.25                   # meters forward from robot center
-    dipbob_y: 0.0
-    dipbob_z: 0.0
+    x: 0.25                          # meters forward from robot center
+    y: 0.0                           # meters left from robot center
+    z: 0.0                           # meters up from robot center
 
     # Offset from dipbob to chute position
     chute_offset_x: 0.15             # meters forward from dipbob

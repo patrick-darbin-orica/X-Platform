@@ -111,7 +111,7 @@ class BaseModule(ABC):
         This should match the module_name in mission_config.yaml.
 
         Returns:
-            Module name (e.g., "xstem", "xprime")
+            Module name (e.g., "xprime", "xstem")
         """
         pass
 

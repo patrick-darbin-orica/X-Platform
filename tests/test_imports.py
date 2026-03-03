@@ -10,7 +10,7 @@ errors = []
 # Test platform imports
 print("\n[1/5] Testing platform.core imports...")
 try:
-    from amiga_platform.core.config import XStemConfig
+    from amiga_platform.core.config import PlatformConfig
     from amiga_platform.core.service_manager import ServiceManager
     from amiga_platform.core.state_machine import NavigationStateMachine, NavState
     print("  ✓ platform.core imports successful")

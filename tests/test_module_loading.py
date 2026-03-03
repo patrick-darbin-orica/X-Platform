@@ -25,14 +25,20 @@ except ImportError as e:
     errors.append(f"registry: {e}")
     print(f"  ✗ Module registry import failed: {e}")
 
-# Test 3: Import XStem module (auto-registers)
-print("\n[3/5] Testing XStem module import...")
+# Test 3: Import modules (auto-registers)
+print("\n[3/5] Testing module imports...")
 try:
     from modules.xstem import StemmingModule
-    print("  ✓ XStem module imports successful")
+    print("  ✓ xstem module imports successful")
 except ImportError as e:
     errors.append(f"xstem: {e}")
-    print(f"  ✗ XStem module import failed: {e}")
+    print(f"  ✗ xstem module import failed: {e}")
+try:
+    from modules.xprime import PrimingModule
+    print("  ✓ xprime module imports successful")
+except ImportError as e:
+    errors.append(f"xprime: {e}")
+    print(f"  ✗ xprime module import failed: {e}")
 
 # Test 4: Check module registration
 print("\n[4/5] Testing module registration...")
@@ -42,7 +48,7 @@ try:
     print(f"  ✓ Registered modules: {modules}")
 
     # Verify expected modules
-    expected = ["none", "xstem"]
+    expected = ["none", "xstem", "xprime"]
     for mod in expected:
         if mod in modules:
             print(f"    ✓ '{mod}' registered")
@@ -67,7 +73,12 @@ try:
     # Test xstem module
     XStemClass = registry.get("xstem")
     xstem_module = XStemClass()
-    print(f"  ✓ XStem module instantiated: {xstem_module.module_name}")
+    print(f"  ✓ xstem module instantiated: {xstem_module.module_name}")
+
+    # Test xprime module
+    XPrimeClass = registry.get("xprime")
+    xprime_module = XPrimeClass()
+    print(f"  ✓ xprime module instantiated: {xprime_module.module_name}")
 
 except Exception as e:
     errors.append(f"instantiation: {e}")
@@ -81,7 +92,7 @@ if len(errors) == 0:
     print("✓ All Phase 3 tests passed!")
     print("  - Module interface defined")
     print("  - Module registry working")
-    print("  - XStem module implements BaseModule")
+    print("  - All modules implement BaseModule")
     print("  - Modules can be loaded and instantiated")
     print("=" * 60)
     exit(0)

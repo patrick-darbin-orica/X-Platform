@@ -1,0 +1,23 @@
+# XPrime Module Configuration
+# Tool-specific settings for the XPrime module
+
+module_name: "xprime"
+module_type: "priming"
+
+config:
+  # Tool Offset Configuration
+  # Offset from robot center to tool position
+  tool_offset:
+    x: -0.85                   # meters forward from robot center
+    y: 0.0                   # meters left from robot center
+    z: 0.0                    # meters up from robot center
+
+  # Primer Deployment Configuration
+  primer:
+    ack_timeout_s: 1.0               # Wait time for deployment ACK
+    measurement_settle_s: 1.0        # Settle time after deployment
+
+  # Alignment Tolerances
+  alignment:
+    tolerance_m: 0.02                # Alignment tolerance
+    check_timeout_s: 10.0            # Timeout for alignment checks
