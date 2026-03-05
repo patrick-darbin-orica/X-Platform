@@ -31,16 +31,17 @@ waypoints:
 module: xprime
 
 vision:
-  enabled: false
+  enabled: true
   mode: "stop_to_detect"
   search_radius_m: 1.0
   detection_timeout_s: 10.0
   min_confidence: 0.7
 
   forward_camera:
-    service_name: "oak/1"
+    service_name: "oak/2"
     role: "forward"
     model_path: "~/Amiga/X-Platform/models/best1.engine"
+    ip_address: "10.95.76.12"
     offset_x: 0.55
     offset_y: 0.0
     offset_z: 0.88
