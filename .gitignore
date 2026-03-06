@@ -61,3 +61,5 @@ logs/*.log
 
 # md files
 *.md
+
+references/

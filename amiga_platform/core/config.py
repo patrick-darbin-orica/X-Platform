@@ -52,6 +52,7 @@ class CameraConfig(BaseModel):
     service_name: str  # "oak/0" or "oak/1"
     role: Literal["forward", "downward"]
     model_path: Path
+    ip_address: Optional[str] = None  # IP for direct depthai v3 access (PoE cameras)
     offset_x: float  # Camera position on robot
     offset_y: float
     offset_z: float

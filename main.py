@@ -10,6 +10,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+import numpy as np
+
 # Import platform components
 from amiga_platform.core.blast_pattern import BlastPattern
 from amiga_platform.core.config import PlatformConfig, load_service_configs
@@ -19,6 +21,7 @@ from amiga_platform.hardware.filter_utils import check_filter_convergence, imu_w
 from amiga_platform.navigation.navigation_manager import NavigationManager
 from amiga_platform.navigation.path_planner import PathPlanner
 from amiga_platform.vision.vision_system import VisionSystem
+from utils.detection_relay import CollarDetection, DetectionRelay
 
 # Import module system
 from modules.base_module import BaseModule, ModuleContext
@@ -65,6 +68,36 @@ log_file = setup_logging()
 logger = logging.getLogger(__name__)
 
 
+def _robot_frame_to_world(det: CollarDetection, robot_pose):
+    """Convert a robot-frame detection offset to a world-frame Pose3F64.
+
+    Uses the robot's current yaw + position to rotate the offset into the
+    world coordinate frame (NWU).
+    """
+    import math as _math
+
+    from farm_ng_core_pybind import Isometry3F64, Pose3F64, Rotation3F64
+
+    t = robot_pose.a_from_b.translation
+    xr, yr = float(t[0]), float(t[1])
+
+    # Extract yaw from rotation matrix
+    R = np.array(robot_pose.a_from_b.rotation.matrix)
+    yaw = _math.atan2(R[1, 0], R[0, 0])
+
+    c, s = _math.cos(yaw), _math.sin(yaw)
+    dx, dy = det.x_fwd_m, det.y_left_m
+    xw = xr + dx * c - dy * s
+    yw = yr + dx * s + dy * c
+
+    iso = Isometry3F64([xw, yw, 0.0], Rotation3F64.Rz(yaw))
+    return Pose3F64(
+        a_from_b=iso,
+        frame_a="world",
+        frame_b="hole",
+    )
+
+
 class XModuleNavigator:
     """Main navigation orchestrator."""
 
@@ -86,6 +119,7 @@ class XModuleNavigator:
         self.path_planner: Optional[PathPlanner] = None
         self.nav_manager: Optional[NavigationManager] = None
         self.vision: Optional[VisionSystem] = None
+        self.relay: Optional[DetectionRelay] = None
         self.module: Optional[BaseModule] = None
         self.blast_pattern: Optional[BlastPattern] = None
 
@@ -126,6 +160,11 @@ class XModuleNavigator:
         else:
             logger.info("Vision system disabled")
             self.vision = None
+
+        # Start detection relay (receives UDP from standalone detector)
+        if self.config.vision.enabled:
+            self.relay = DetectionRelay()
+            await self.relay.start()
 
         # Dynamically import only the selected module (auto-registers it)
         module_name = self.config.module
@@ -265,7 +304,22 @@ class XModuleNavigator:
 
                 # State: DETECTING
                 hole_pose = None
-                if self.config.vision.enabled and self.vision:
+                if self.config.vision.enabled and self.relay:
+                    logger.info("Waiting for collar detection from standalone detector...")
+                    self.relay.clear()
+                    deadline = asyncio.get_event_loop().time() + self.config.vision.detection_timeout_s
+                    while asyncio.get_event_loop().time() < deadline:
+                        det = self.relay.get_latest(max_age_s=1.0)
+                        if det and det.confidence >= self.config.vision.min_confidence:
+                            current_pose = await self.path_planner.get_current_pose()
+                            hole_pose = _robot_frame_to_world(det, current_pose)
+                            logger.info(
+                                "Collar detected: x_fwd=%.2f y_left=%.2f conf=%.2f",
+                                det.x_fwd_m, det.y_left_m, det.confidence,
+                            )
+                            break
+                        await asyncio.sleep(0.1)
+                elif self.config.vision.enabled and self.vision:
                     logger.info("Detecting hole with forward camera...")
                     hole_pose = await self.vision.detect_hole_forward(
                         search_center=self.path_planner.get_hole_position(wp_index),
@@ -392,6 +446,10 @@ class XModuleNavigator:
         # Shutdown module
         if self.module:
             await self.module.shutdown()
+
+        # Stop detection relay
+        if self.relay:
+            await self.relay.stop()
 
         # Stop navigation manager monitoring
         if self.nav_manager:
