@@ -29,6 +29,10 @@ import depthai as dai
 import numpy as np
 from farm_ng_core_pybind import Isometry3F64, Pose3F64, Rotation3F64
 
+# Add repo root to path for utils imports
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from utils.camera_frame_cache import set_latest_frame
+
 # YOLO model — prefer YOLOE (works for standard YOLO models too in
 # ultralytics >= 8.3), fall back to YOLO if YOLOE is unavailable.
 try:
@@ -411,6 +415,8 @@ def run_detection_loop(
             if img_w is None:
                 img_h, img_w = latest_rgb.shape[:2]
             frame_count += 1
+            # Write frame to cache for Flask GUI
+            set_latest_frame(latest_rgb)
 
         if latest_rgb is None or latest_depth is None:
             continue

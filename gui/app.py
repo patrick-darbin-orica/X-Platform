@@ -62,7 +62,7 @@ def index():
 
 @app.route('/video_feed')
 def video_feed():
-    """Stream camera feed 1 (detection camera)."""
+    """Stream camera feed 1 (OAK-2 via depthai)."""
     def generate():
         while True:
             frame_bytes = get_latest_frame_bytes()
@@ -168,7 +168,7 @@ def camera_diagnostics():
     """Get camera feed diagnostics."""
     diagnostics = {
         'camera_1': {
-            'source': 'detection camera',
+            'source': 'OAK-2 (depthai v3)',
             'cache_file': '/tmp/amiga_camera_frame.jpg',
             'status': 'active' if Path('/tmp/amiga_camera_frame.jpg').exists() else 'no_frames'
         },
