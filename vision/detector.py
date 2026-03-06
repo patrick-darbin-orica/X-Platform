@@ -55,7 +55,6 @@ DEPTH_LOWER_MM = 100
 DEPTH_UPPER_MM = 5000
 
 RELAY_ADDR = ("127.0.0.1", 41234)
-VISION_FLAG_FILE = Path(__file__).resolve().parent.parent / ".vision_running"
 
 logging.basicConfig(
     level=logging.INFO,
@@ -534,13 +533,6 @@ def main() -> None:
         pitch_deg=config["pitch_deg"],
     )
 
-    # Create vision-running flag
-    try:
-        VISION_FLAG_FILE.touch()
-        logger.info("Vision flag: %s", VISION_FLAG_FILE)
-    except Exception as e:
-        logger.warning("Could not create vision flag: %s", e)
-
     # Run
     logger.info("Starting detection loop ...")
     pipeline.start()
@@ -551,13 +543,6 @@ def main() -> None:
     except KeyboardInterrupt:
         logger.info("Interrupted by user")
     finally:
-        # Clean up flag file
-        try:
-            if VISION_FLAG_FILE.exists():
-                VISION_FLAG_FILE.unlink()
-                logger.info("Removed vision flag")
-        except Exception:
-            pass
         logger.info("Detector exited cleanly")
 
 
