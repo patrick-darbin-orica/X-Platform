@@ -8,7 +8,7 @@ config:
   # Tool Offset Configuration (Robot Arm)
   # Offset from robot center to tool position
   tool_offset:
-    x: -0.85                   # meters forward from robot center
+    x: -0.47                   # meters forward from robot center
     y: 0.0                   # meters left from robot center
     z: 0.0                    # meters up from robot center
 

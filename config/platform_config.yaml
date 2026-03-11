@@ -79,13 +79,14 @@ vision:
 
   # Forward-facing camera (for hole detection ahead)
   forward_camera:
-    service_name: "oak/1"
-    model_path: "~/Amiga/xstem/models/best.pt"
-    offset_x: 0.55                    # Camera position on robot (meters)
+    service_name: "oak/2"
+    role: "forward"
+    model_path: "~/Amiga/X-Platform/models/best1.engine"
+    ip_address: "10.95.76.12"
+    offset_x: 0.32
     offset_y: 0.0
-    offset_z: 0.88
-    pitch_deg: 30.0                   # Camera tilt angle
-
+    offset_z: 0.65
+    pitch_deg: 30.0
   # Downward-facing camera (for alignment checks)
   downward_camera:
     service_name: "oak/0"

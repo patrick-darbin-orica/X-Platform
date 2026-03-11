@@ -58,6 +58,14 @@ function updateConnectionStatus(connected) {
 }
 
 function updateRobotStatus(status) {
+    // Update module name
+    if (status.module) {
+        const moduleBadge = document.getElementById('module-name');
+        moduleBadge.textContent = status.module;
+        moduleBadge.style.backgroundColor = '#0294D0';
+        moduleBadge.style.color = '#ffffff';
+    }
+
     // Update pose
     if (status.pose) {
         document.getElementById('pos-x').textContent = status.pose.x.toFixed(2) + ' m';

@@ -8,9 +8,9 @@ and relays results via UDP to the main navigation process.
 Usage:
     python vision/detector.py --config config/navigation_config.yaml
 
-Config is read from the ``vision.forward_camera`` section of
-``navigation_config.yaml``.  The camera IP, model path, and extrinsic
-offsets are all pulled from there.
+Camera hardware config (IP, model path, extrinsic offsets) is read from
+``platform_config.yaml``.  Behavioural settings (min_confidence) come
+from ``navigation_config.yaml``.
 """
 from __future__ import annotations
 
@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import List, Optional
 
 import depthai as dai
+import cv2
 import numpy as np
 from farm_ng_core_pybind import Isometry3F64, Pose3F64, Rotation3F64
 
@@ -71,19 +72,30 @@ logger = logging.getLogger("detector")
 # Config loading
 # ---------------------------------------------------------------------------
 
-def load_config(config_path: Path) -> dict:
-    """Load the vision.forward_camera section from navigation_config.yaml.
+def load_config(nav_config_path: Path) -> dict:
+    """Load detector config from platform_config.yaml and navigation_config.yaml.
+
+    Camera hardware settings (ip, model, offsets) come from
+    ``platform_config.yaml`` under ``vision.forward_camera``.
+    Behavioural settings (min_confidence) come from
+    ``navigation_config.yaml`` under ``vision``.
 
     Returns a dict with keys: ip_address, model_path, offset_x/y/z, pitch_deg,
-    plus top-level vision keys (min_confidence, etc.).
+    plus min_confidence.
     """
     import yaml
 
-    with open(config_path) as f:
-        data = yaml.safe_load(f)
+    # Platform config lives next to navigation config
+    platform_path = nav_config_path.parent / "platform_config.yaml"
 
-    vision = data.get("vision", {})
-    cam = vision.get("forward_camera", {})
+    with open(platform_path) as f:
+        platform = yaml.safe_load(f)
+
+    with open(nav_config_path) as f:
+        nav = yaml.safe_load(f)
+
+    cam = platform.get("vision", {}).get("forward_camera", {})
+    vision = nav.get("vision", {})
 
     return {
         # Camera connection
@@ -95,7 +107,7 @@ def load_config(config_path: Path) -> dict:
         "offset_y": float(cam.get("offset_y", 0.0)),
         "offset_z": float(cam.get("offset_z", 0.0)),
         "pitch_deg": float(cam.get("pitch_deg", 0.0)),
-        # Detection thresholds
+        # Detection thresholds (from navigation config)
         "min_confidence": float(vision.get("min_confidence", 0.5)),
     }
 
@@ -415,8 +427,20 @@ def run_detection_loop(
             if img_w is None:
                 img_h, img_w = latest_rgb.shape[:2]
             frame_count += 1
-            # Write frame to cache for Flask GUI
-            set_latest_frame(latest_rgb)
+
+            # Draw latest detections on frame and write to cache for Flask GUI
+            display_frame = latest_rgb.copy()
+            for det in detections:
+                x1 = int(det["xmin"] * img_w)
+                y1 = int(det["ymin"] * img_h)
+                x2 = int(det["xmax"] * img_w)
+                y2 = int(det["ymax"] * img_h)
+                conf_val = det["confidence"]
+                label_txt = f"{det['label_name']} {conf_val:.2f}"
+                cv2.rectangle(display_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                cv2.putText(display_frame, label_txt, (x1, y1 - 8),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+            set_latest_frame(display_frame)
 
         if latest_rgb is None or latest_depth is None:
             continue

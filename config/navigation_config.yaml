@@ -36,25 +36,7 @@ vision:
   search_radius_m: 1.0
   detection_timeout_s: 10.0
   min_confidence: 0.7
-
-  forward_camera:
-    service_name: "oak/2"
-    role: "forward"
-    model_path: "~/Amiga/X-Platform/models/best1.engine"
-    ip_address: "10.95.76.12"
-    offset_x: 0.55
-    offset_y: 0.0
-    offset_z: 0.88
-    pitch_deg: 30.0
-
-  downward_camera:
-    service_name: "oak/0"
-    role: "downward"
-    model_path: "~/Amiga/X-Platform/models/best1.engine"
-    offset_x: 0.25
-    offset_y: 0.0
-    offset_z: 0.5
-    pitch_deg: -90.0
+  # Camera hardware config is in platform_config.yaml
 
 navigation:
   approach_offset_m: 1.2

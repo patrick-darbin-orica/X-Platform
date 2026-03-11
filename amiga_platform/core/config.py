@@ -65,15 +65,19 @@ class CameraConfig(BaseModel):
 
 
 class VisionConfig(BaseModel):
-    """Vision system configuration."""
+    """Vision system configuration.
+
+    Camera hardware settings live in platform_config.yaml.
+    Only behavioural knobs belong here.
+    """
 
     enabled: bool = True
     mode: Literal["stop_to_detect", "detect_on_fly"] = "stop_to_detect"
     search_radius_m: float = 1.0
     detection_timeout_s: float = 10.0
     min_confidence: float = 0.7
-    forward_camera: CameraConfig
-    downward_camera: CameraConfig
+    forward_camera: Optional[CameraConfig] = None
+    downward_camera: Optional[CameraConfig] = None
 
 
 class NavigationConfig(BaseModel):

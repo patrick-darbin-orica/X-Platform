@@ -42,6 +42,7 @@ class AppState:
     """Shared state for the GUI."""
     def __init__(self):
         self.navigation_process: Optional[subprocess.Popen] = None
+        self.module_name: str = "none"
 
     def is_navigation_running(self) -> bool:
         if self.navigation_process is None:
@@ -50,6 +51,16 @@ class AppState:
 
 
 state = AppState()
+
+# Load module name from navigation config at startup
+try:
+    import yaml as _yaml
+    _nav_cfg_path = REPO_ROOT / 'config' / 'navigation_config.yaml'
+    with open(_nav_cfg_path) as _f:
+        _nav_cfg = _yaml.safe_load(_f)
+    state.module_name = _nav_cfg.get('module', 'none')
+except Exception:
+    pass
 
 
 # ==================== Routes ====================
@@ -143,6 +154,7 @@ def robot_status():
 
     status = {
         'navigation_running': subprocess_running,
+        'module': state.module_name,
         'track_status': nav_state['track_status'],
         'current_waypoint': nav_state['current_waypoint_index'],
         'total_waypoints': nav_state['total_waypoints'],
@@ -206,20 +218,24 @@ def handle_disconnect():
 
 @socketio.on('start_navigation')
 def handle_start_navigation():
-    """Start the navigation system by running run.sh."""
+    """Start the navigation system by running main.py."""
     if state.is_navigation_running():
         emit('error', {'message': 'Navigation already running'})
         return
 
     try:
-        run_script = REPO_ROOT / 'scripts' / 'run.sh'
-        if not run_script.exists():
-            emit('error', {'message': f'run.sh not found at {run_script}'})
+        venv_python = REPO_ROOT / 'venv' / 'bin' / 'python'
+        main_script = REPO_ROOT / 'main.py'
+
+        if not main_script.exists():
+            emit('error', {'message': f'main.py not found at {main_script}'})
             return
 
+        python_bin = str(venv_python) if venv_python.exists() else sys.executable
+
         state.navigation_process = subprocess.Popen(
-            ['bash', str(run_script)],
-            cwd=REPO_ROOT,
+            [python_bin, str(main_script)],
+            cwd=str(REPO_ROOT),
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             bufsize=1,
@@ -239,7 +255,7 @@ def handle_start_navigation():
         output_thread.start()
 
         emit('success', {'message': 'Navigation started'})
-        print(f"Started navigation process (PID: {state.navigation_process.pid})")
+        print(f"Started main.py (PID: {state.navigation_process.pid})")
 
     except Exception as e:
         emit('error', {'message': f'Failed to start navigation: {str(e)}'})
@@ -380,6 +396,7 @@ def background_status_updater():
 
             status = {
                 'navigation_running': subprocess_running,
+                'module': state.module_name,
                 'track_status': nav_state['track_status'],
                 'current_waypoint': nav_state['current_waypoint_index'],
                 'total_waypoints': nav_state['total_waypoints'],

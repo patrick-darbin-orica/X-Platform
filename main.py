@@ -10,8 +10,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-import numpy as np
-
 # Import platform components
 from amiga_platform.core.blast_pattern import BlastPattern
 from amiga_platform.core.config import PlatformConfig, load_service_configs
@@ -20,7 +18,6 @@ from amiga_platform.core.state_machine import NavigationStateMachine
 from amiga_platform.hardware.filter_utils import check_filter_convergence, imu_wiggle
 from amiga_platform.navigation.navigation_manager import NavigationManager
 from amiga_platform.navigation.path_planner import PathPlanner
-from amiga_platform.vision.vision_system import VisionSystem
 from utils.detection_relay import CollarDetection, DetectionRelay
 
 # Import module system
@@ -81,9 +78,8 @@ def _robot_frame_to_world(det: CollarDetection, robot_pose):
     t = robot_pose.a_from_b.translation
     xr, yr = float(t[0]), float(t[1])
 
-    # Extract yaw from rotation matrix
-    R = np.array(robot_pose.a_from_b.rotation.matrix)
-    yaw = _math.atan2(R[1, 0], R[0, 0])
+    # Extract yaw from SO3 log (rotation vector; yaw is the z-component)
+    yaw = float(robot_pose.a_from_b.rotation.log()[-1])
 
     c, s = _math.cos(yaw), _math.sin(yaw)
     dx, dy = det.x_fwd_m, det.y_left_m
@@ -118,7 +114,7 @@ class XModuleNavigator:
         # Components (will be initialized in setup())
         self.path_planner: Optional[PathPlanner] = None
         self.nav_manager: Optional[NavigationManager] = None
-        self.vision: Optional[VisionSystem] = None
+        self.vision = None
         self.relay: Optional[DetectionRelay] = None
         self.module: Optional[BaseModule] = None
         self.blast_pattern: Optional[BlastPattern] = None
@@ -148,23 +144,14 @@ class XModuleNavigator:
         )
         await self.nav_manager.start_monitoring()
 
-        # Vision system
-        if self.config.vision.enabled:
-            self.vision = VisionSystem(
-                self.services.oak0,
-                self.services.oak1,
-                self.config.vision.forward_camera.model_dump(),
-                self.config.vision.downward_camera.model_dump(),
-            )
-            await self.vision.initialize()
-        else:
-            logger.info("Vision system disabled")
-            self.vision = None
-
-        # Start detection relay (receives UDP from standalone detector)
+        # Vision: standalone detector communicates via UDP relay.
+        # VisionSystem (gRPC camera clients) is not needed for this path.
+        self.vision = None
         if self.config.vision.enabled:
             self.relay = DetectionRelay()
             await self.relay.start()
+        else:
+            logger.info("Vision system disabled")
 
         # Dynamically import only the selected module (auto-registers it)
         module_name = self.config.module
@@ -274,6 +261,24 @@ class XModuleNavigator:
                 wp_pose = self.path_planner.waypoints[wp_index + 1]  # Get navigation target
                 logger.info(f"========== Navigating to hole {wp_index} (waypoint {wp_index + 1}) ==========")
 
+                # Debug: log waypoint and robot positions
+                _wp_t = wp_pose.a_from_b.translation
+                logger.info(
+                    "Waypoint NWU: north=%.2f west=%.2f  (all waypoints: %s)",
+                    float(_wp_t[0]), float(_wp_t[1]),
+                    ", ".join(
+                        f"wp{k}=({float(v.a_from_b.translation[0]):.1f}, {float(v.a_from_b.translation[1]):.1f})"
+                        for k, v in sorted(self.path_planner.waypoints.items())
+                    ),
+                )
+                _cur = await self.path_planner.get_current_pose()
+                _cur_t = _cur.a_from_b.translation
+                _cur_yaw = float(_cur.a_from_b.rotation.log()[-1])
+                logger.info(
+                    "Robot pose NWU: north=%.2f west=%.2f yaw=%.2f rad",
+                    float(_cur_t[0]), float(_cur_t[1]), _cur_yaw,
+                )
+
                 # Mark hole as in progress
                 self.blast_pattern.mark_in_progress(wp_index)
 
@@ -319,13 +324,8 @@ class XModuleNavigator:
                             )
                             break
                         await asyncio.sleep(0.1)
-                elif self.config.vision.enabled and self.vision:
-                    logger.info("Detecting hole with forward camera...")
-                    hole_pose = await self.vision.detect_hole_forward(
-                        search_center=self.path_planner.get_hole_position(wp_index),
-                        search_radius_m=self.config.vision.search_radius_m,
-                        timeout_s=self.config.vision.detection_timeout_s,
-                    )
+                # Note: inline VisionSystem detection removed — standalone
+                # detector + relay is the only supported vision path.
 
                 # Determine hole position (from vision or CSV fallback)
                 if hole_pose:
