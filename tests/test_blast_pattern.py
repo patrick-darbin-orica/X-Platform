@@ -25,19 +25,24 @@ def test_blast_pattern_initialization():
     """Test basic initialization."""
     holes = create_test_holes(6)
     pattern = BlastPattern(
-        holes=holes, last_row_waypoint_index=2, mission_name="test_mission"
+        holes=holes,
+        echelon_ends=[2, 5],
+        hole_ids={1: "A0", 2: "A1", 3: "A2", 4: "B2", 5: "B1", 6: "B0"},
+        mission_name="test_mission",
     )
 
     assert len(pattern.holes) == 6
-    assert pattern.last_row_index == 2
+    assert pattern.echelon_ends == {2, 5}
     assert pattern.mission_name == "test_mission"
+    assert pattern.holes[0].hole_id == "A0"
+    assert pattern.holes[3].hole_id == "B2"
     print("✓ Initialization test passed")
 
 
 def test_hole_iteration():
     """Test getting next hole."""
     holes = create_test_holes(4)
-    pattern = BlastPattern(holes=holes, last_row_waypoint_index=1)
+    pattern = BlastPattern(holes=holes, echelon_ends=[1, 3])
 
     # All should be pending initially
     next_hole = pattern.get_next_hole()
@@ -56,7 +61,7 @@ def test_hole_iteration():
 def test_status_tracking():
     """Test hole status changes."""
     holes = create_test_holes(3)
-    pattern = BlastPattern(holes=holes, last_row_waypoint_index=1)
+    pattern = BlastPattern(holes=holes, echelon_ends=[2])
 
     # Mark in progress
     pattern.mark_in_progress(0)
@@ -84,23 +89,38 @@ def test_status_tracking():
 def test_echelon_detection():
     """Test echelon end detection."""
     holes = create_test_holes(8)
-    pattern = BlastPattern(
-        holes=holes, last_row_waypoint_index=3
-    )  # 4 holes per row
+    # Two echelons: [0,1,2,3] and [4,5,6,7]
+    pattern = BlastPattern(holes=holes, echelon_ends=[3, 7])
 
-    # Row ends at indices 3, 7, 11...
+    # Echelon ends at indices 3 and 7
     assert pattern.is_echelon_end(3) is True
-    assert pattern.is_echelon_end(7) is True
     assert pattern.is_echelon_end(0) is False
     assert pattern.is_echelon_end(5) is False
 
+    # Last hole overall should NOT trigger U-turn
+    assert pattern.is_echelon_end(7) is False
+
     print("✓ Echelon detection test passed")
+
+
+def test_echelon_detection_unequal_rows():
+    """Test echelon end detection with different row sizes."""
+    holes = create_test_holes(7)
+    # Row A has 4 holes, row B has 3 holes
+    pattern = BlastPattern(holes=holes, echelon_ends=[3, 6])
+
+    assert pattern.is_echelon_end(3) is True   # End of row A
+    assert pattern.is_echelon_end(6) is False   # End of row B (last hole overall)
+    assert pattern.is_echelon_end(2) is False
+    assert pattern.is_echelon_end(5) is False
+
+    print("✓ Echelon detection (unequal rows) test passed")
 
 
 def test_completion_stats():
     """Test completion statistics."""
     holes = create_test_holes(5)
-    pattern = BlastPattern(holes=holes, last_row_waypoint_index=1)
+    pattern = BlastPattern(holes=holes, echelon_ends=[2, 4])
 
     pattern.mark_completed(0)
     pattern.mark_completed(1)
@@ -131,7 +151,10 @@ def test_state_persistence():
     """Test saving and loading state."""
     holes = create_test_holes(4)
     pattern = BlastPattern(
-        holes=holes, last_row_waypoint_index=1, mission_name="persistence_test"
+        holes=holes,
+        echelon_ends=[1, 3],
+        hole_ids={1: "A0", 2: "A1", 3: "B1", 4: "B0"},
+        mission_name="persistence_test",
     )
 
     # Mark some holes
@@ -152,9 +175,15 @@ def test_state_persistence():
         assert len(loaded_pattern.holes) == 4
         assert loaded_pattern.holes[0].status == HoleStatus.COMPLETED
         assert loaded_pattern.holes[0].measurements["depth"] == 2.0
+        assert loaded_pattern.holes[0].hole_id == "A0"
         assert loaded_pattern.holes[1].status == HoleStatus.FAILED
         assert loaded_pattern.holes[1].last_error == "test error"
         assert loaded_pattern.holes[2].status == HoleStatus.PENDING
+        assert loaded_pattern.holes[2].hole_id == "B1"
+
+        # Verify echelon ends survived persistence
+        assert loaded_pattern.is_echelon_end(1) is True
+        assert loaded_pattern.is_echelon_end(3) is False  # Last hole overall
 
     print("✓ State persistence test passed")
 
@@ -167,6 +196,7 @@ def main():
     test_hole_iteration()
     test_status_tracking()
     test_echelon_detection()
+    test_echelon_detection_unequal_rows()
     test_completion_stats()
     test_state_persistence()
 

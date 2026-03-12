@@ -34,7 +34,7 @@ class WaypointConfig(BaseModel):
     # converted waypoints align with the filter's world frame origin.
     reference_lat: Optional[float] = None
     reference_lon: Optional[float] = None
-    last_row_waypoint_index: int
+    last_row_waypoint_index: Optional[int] = None
     turn_direction: Literal["left", "right"] = "left"
     turn_type: Literal["pi_turn", "turn_in_place"] = "pi_turn"
     row_spacing_m: float = 6.0

@@ -130,10 +130,11 @@ class XModuleNavigator:
         )
 
         # Blast pattern (mission state tracking)
-        csv_name = Path(str(self.config.waypoints.csv_path)).stem  # Get filename without extension
+        csv_name = Path(str(self.config.waypoints.csv_path)).stem
         self.blast_pattern = BlastPattern(
-            holes=list(self.path_planner.hole_poses.values()),  # Original hole positions
-            last_row_waypoint_index=self.config.waypoints.last_row_waypoint_index,
+            holes=list(self.path_planner.hole_poses.values()),
+            echelon_ends=self.path_planner.echelon_ends,
+            hole_ids=self.path_planner.hole_ids,
             mission_name=f"mission_{csv_name}",
         )
 
@@ -257,9 +258,9 @@ class XModuleNavigator:
                     break
 
                 wp_index = hole.index
-                # Waypoints are 1-indexed in PathPlanner (CSV row numbering)
-                wp_pose = self.path_planner.waypoints[wp_index + 1]  # Get navigation target
-                logger.info(f"========== Navigating to hole {wp_index} (waypoint {wp_index + 1}) ==========")
+                # Waypoints are 1-indexed in PathPlanner (traversal order)
+                wp_pose = self.path_planner.waypoints[wp_index + 1]
+                logger.info(f"========== Navigating to hole {hole.hole_id} (index {wp_index}) ==========")
 
                 # Debug: log waypoint and robot positions
                 _wp_t = wp_pose.a_from_b.translation
@@ -267,7 +268,7 @@ class XModuleNavigator:
                     "Waypoint NWU: north=%.2f west=%.2f  (all waypoints: %s)",
                     float(_wp_t[0]), float(_wp_t[1]),
                     ", ".join(
-                        f"wp{k}=({float(v.a_from_b.translation[0]):.1f}, {float(v.a_from_b.translation[1]):.1f})"
+                        f"{self.path_planner.hole_ids.get(k, k)}=({float(v.a_from_b.translation[0]):.1f}, {float(v.a_from_b.translation[1]):.1f})"
                         for k, v in sorted(self.path_planner.waypoints.items())
                     ),
                 )
@@ -368,7 +369,7 @@ class XModuleNavigator:
 
                 # State: MODULE_PHASE (Execute module action at hole)
                 self.state_machine.track_complete()
-                logger.info(f"Executing module at waypoint {wp_index}...")
+                logger.info(f"Executing module at hole {hole.hole_id}...")
 
                 # Create execution context for module
                 current_pose = await self.path_planner.get_current_pose()
@@ -387,7 +388,7 @@ class XModuleNavigator:
 
                 # State: UPDATING_PATTERN (Update blast pattern with module result)
                 if result.success:
-                    logger.info(f"✓ Hole {wp_index} completed successfully")
+                    logger.info(f"✓ Hole {hole.hole_id} completed successfully")
                     self.blast_pattern.mark_completed(wp_index, measurements=result.measurements)
                     self.state_machine.tool_complete()
 
@@ -399,7 +400,7 @@ class XModuleNavigator:
                             logger.error("U-turn failed — stopping mission")
                             break
                 else:
-                    logger.error(f"✗ Module execution failed at hole {wp_index}: {result.error}")
+                    logger.error(f"✗ Module execution failed at hole {hole.hole_id}: {result.error}")
                     self.blast_pattern.mark_failed(wp_index, error=result.error or "Unknown error")
                     self.state_machine.tool_failed()
                     # TODO: Implement recovery logic (retry/skip/abort)

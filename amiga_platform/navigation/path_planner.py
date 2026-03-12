@@ -47,16 +47,18 @@ class PathPlanner:
         self.transforms = CoordinateTransforms()
 
         # Load waypoints (raw hole positions, no tool offset)
-        self.hole_poses = self.transforms.load_waypoints_from_csv(
+        waypoint_data = self.transforms.load_waypoints_from_csv(
             Path(waypoint_config.csv_path).expanduser(),
-            waypoint_config.last_row_waypoint_index,
             coordinate_system=waypoint_config.coordinate_system,
             reference_lat=waypoint_config.reference_lat,
             reference_lon=waypoint_config.reference_lon,
         )
 
         # Waypoints are the raw hole positions (tool offset applied later)
-        self.waypoints = self.hole_poses
+        self.hole_poses = waypoint_data.poses
+        self.waypoints = waypoint_data.poses
+        self.hole_ids = waypoint_data.hole_ids
+        self.echelon_ends = waypoint_data.echelon_ends
 
         # Navigation state
         self.current_index = 0

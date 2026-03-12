@@ -1,7 +1,7 @@
 # XStem Navigation System Configuration
 
 waypoints:
-  csv_path: "~/Amiga/X-Platform/paths/kktcRearRoad.csv"
+  csv_path: "~/Amiga/X-Platform/paths/kktcRearRoadspf.csv"
 
   # Coordinate system of the CSV file. One of:
   #   "ENU"     - CSV has dx (East) and dy (North) columns in metres (default)
@@ -19,7 +19,9 @@ waypoints:
   # reference_lat: 35.123456   # decimal degrees
   # reference_lon: 33.456789   # decimal degrees
 
-  last_row_waypoint_index: 3
+  # Hole IDs use letter+number format (e.g. A0, B1). The letter indicates
+  # the echelon/row, the number the hole within that row. Echelon ends and
+  # boustrophedon traversal order are determined automatically from the IDs.
   turn_direction: "left"
   # Turn type for row-end maneuver:
   #   "pi_turn"       - drive forward then 180° arc (2 segments)

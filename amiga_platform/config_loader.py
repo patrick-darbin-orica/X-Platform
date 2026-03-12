@@ -127,7 +127,7 @@ class BlastPatternConfig(BaseModel):
 
     csv_path: Path
     coordinate_system: str = "ENU"
-    last_row_waypoint_index: int
+    last_row_waypoint_index: Optional[int] = None
     turn_direction: str = "left"
     row_spacing_m: float = 6.0
 

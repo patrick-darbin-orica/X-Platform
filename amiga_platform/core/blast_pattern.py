@@ -33,6 +33,7 @@ class HoleRecord:
 
     index: int
     position: Pose3F64
+    hole_id: str = ""
     status: HoleStatus = HoleStatus.PENDING
     attempts: int = 0
     last_error: Optional[str] = None
@@ -43,11 +44,11 @@ class HoleRecord:
         """Convert to dictionary for JSON serialization."""
         return {
             "index": self.index,
+            "hole_id": self.hole_id,
             "position": {
                 "x": self.position.a_from_b.translation[0],
                 "y": self.position.a_from_b.translation[1],
                 "z": self.position.a_from_b.translation[2],
-                # Rotation serialization omitted for now (using identity on load)
             },
             "status": self.status.value,
             "attempts": self.attempts,
@@ -62,7 +63,6 @@ class HoleRecord:
         from farm_ng_core_pybind import Isometry3F64, Rotation3F64
 
         pos = data["position"]
-        # For now, just use identity rotation (TODO: serialize/deserialize rotation properly)
         position = Pose3F64(
             frame_a="world",
             frame_b="hole",
@@ -71,6 +71,7 @@ class HoleRecord:
 
         return cls(
             index=data["index"],
+            hole_id=data.get("hole_id", ""),
             position=position,
             status=HoleStatus(data["status"]),
             attempts=data["attempts"],
@@ -95,29 +96,34 @@ class BlastPattern:
     def __init__(
         self,
         holes: List[Pose3F64],
-        last_row_waypoint_index: int,
+        echelon_ends: List[int],
+        hole_ids: Optional[Dict[int, str]] = None,
         mission_name: str = "mission",
     ):
         """Initialize blast pattern.
 
         Args:
-            holes: List of hole positions (Pose3F64)
-            last_row_waypoint_index: Index of last waypoint in each echelon/row
+            holes: List of hole positions (Pose3F64) in traversal order
+            echelon_ends: 0-based indices where each echelon ends
+            hole_ids: Optional dict mapping 1-based index → hole ID string (e.g. "A0")
             mission_name: Name for this mission (for state files)
         """
         self.mission_name = mission_name
-        self.last_row_index = last_row_waypoint_index
+        self.echelon_ends = set(echelon_ends)
+        self.echelon_ends_list = list(echelon_ends)
 
-        # Create hole records
-        self.holes: List[HoleRecord] = [
-            HoleRecord(index=i, position=pose) for i, pose in enumerate(holes)
-        ]
+        # Create hole records with hole IDs
+        self.holes: List[HoleRecord] = []
+        for i, pose in enumerate(holes):
+            hid = hole_ids.get(i + 1, str(i)) if hole_ids else str(i)
+            self.holes.append(HoleRecord(index=i, position=pose, hole_id=hid))
 
         self.current_hole_index: Optional[int] = None
 
+        ids_str = ", ".join(h.hole_id for h in self.holes)
         logger.info(
-            f"Blast pattern initialized: {len(self.holes)} holes, "
-            f"last row index: {last_row_waypoint_index}"
+            f"Blast pattern initialized: {len(self.holes)} holes [{ids_str}], "
+            f"echelon ends: {sorted(self.echelon_ends)}"
         )
 
     def get_next_hole(self) -> Optional[HoleRecord]:
@@ -155,7 +161,7 @@ class BlastPattern:
             hole.status = HoleStatus.IN_PROGRESS
             hole.attempts += 1
             self.current_hole_index = index
-            logger.info(f"Hole {index} marked IN_PROGRESS (attempt {hole.attempts})")
+            logger.info(f"Hole {hole.hole_id} marked IN_PROGRESS (attempt {hole.attempts})")
 
     def mark_completed(
         self, index: int, measurements: Optional[Dict] = None
@@ -172,7 +178,7 @@ class BlastPattern:
             hole.timestamp_completed = datetime.now().isoformat()
             if measurements:
                 hole.measurements = measurements
-            logger.info(f"✓ Hole {index} marked COMPLETED")
+            logger.info(f"✓ Hole {hole.hole_id} marked COMPLETED")
 
     def mark_failed(self, index: int, error: str) -> None:
         """Mark hole as failed with error message.
@@ -185,7 +191,7 @@ class BlastPattern:
         if hole:
             hole.status = HoleStatus.FAILED
             hole.last_error = error
-            logger.error(f"✗ Hole {index} marked FAILED: {error}")
+            logger.error(f"✗ Hole {hole.hole_id} marked FAILED: {error}")
 
     def mark_skipped(self, index: int, reason: str) -> None:
         """Mark hole as skipped.
@@ -198,7 +204,7 @@ class BlastPattern:
         if hole:
             hole.status = HoleStatus.SKIPPED
             hole.last_error = reason
-            logger.warning(f"⊘ Hole {index} marked SKIPPED: {reason}")
+            logger.warning(f"⊘ Hole {hole.hole_id} marked SKIPPED: {reason}")
 
     def is_complete(self) -> bool:
         """Check if all holes are processed (completed, failed, or skipped).
@@ -216,18 +222,18 @@ class BlastPattern:
         """Check if hole index is at the end of an echelon/row.
 
         Used to determine if U-turn maneuver is needed.
+        Returns False for the very last hole in the pattern since
+        there is no next row to turn into.
 
         Args:
-            index: Hole index
+            index: 0-based hole index
 
         Returns:
-            True if this is the last hole in a row
+            True if this is the last hole in a row (but not the last hole overall)
         """
-        # Check if index is the last waypoint in a row.
-        # last_row_index is the number of waypoints per row.
-        # e.g., if last_row_index=3, rows are [0,1,2], [3,4,5], ...
-        # so echelon ends are at indices 2, 5, 8, ...
-        return (index + 1) % self.last_row_index == 0
+        if index >= len(self.holes) - 1:
+            return False
+        return index in self.echelon_ends
 
     def get_completion_stats(self) -> Dict[str, int]:
         """Get completion statistics.
@@ -269,7 +275,7 @@ class BlastPattern:
         """
         state = {
             "mission_name": self.mission_name,
-            "last_row_index": self.last_row_index,
+            "echelon_ends": self.echelon_ends_list,
             "current_hole_index": self.current_hole_index,
             "timestamp": datetime.now().isoformat(),
             "holes": [hole.to_dict() for hole in self.holes],
@@ -298,10 +304,13 @@ class BlastPattern:
         # Create instance
         holes = [HoleRecord.from_dict(h) for h in state["holes"]]
         hole_positions = [h.position for h in holes]
+        hole_ids = {h.index + 1: h.hole_id for h in holes}
+        echelon_ends = state.get("echelon_ends", [])
 
         pattern = cls(
             holes=hole_positions,
-            last_row_waypoint_index=state["last_row_index"],
+            echelon_ends=echelon_ends,
+            hole_ids=hole_ids,
             mission_name=state["mission_name"],
         )
 
