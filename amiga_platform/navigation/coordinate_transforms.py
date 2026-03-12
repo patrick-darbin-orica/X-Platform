@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import logging
 import math
+import re
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -17,6 +19,15 @@ import pandas as pd
 from farm_ng_core_pybind import Isometry3F64, Pose3F64, Rotation3F64
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class WaypointData:
+    """Waypoints in boustrophedon traversal order with echelon metadata."""
+
+    poses: dict[int, Pose3F64]       # 1-indexed, traversal order
+    hole_ids: dict[int, str]         # 1-indexed → "A0", "B2", etc.
+    echelon_ends: list[int]          # 0-based indices where each echelon ends
 
 
 class CoordinateTransforms:
