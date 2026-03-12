@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Simple YAML validation test for new configuration files."""
+"""Simple YAML validation test for configuration files."""
 from pathlib import Path
 import yaml
 
@@ -30,38 +30,26 @@ print("=" * 60)
 
 results = []
 
-# Test all new config files
+results.append(test_yaml_file(
+    Path("config/navigation_config.yaml"),
+    "Navigation Config"
+))
+
 results.append(test_yaml_file(
     Path("config/platform_config.yaml"),
     "Platform Config"
 ))
 
 results.append(test_yaml_file(
-    Path("config/mission_config.yaml"),
-    "Mission Config"
-))
-
-results.append(test_yaml_file(
-    Path("modules/xstem/config.yaml"),
-    "XStem Module Config"
-))
-
-results.append(test_yaml_file(
-    Path("config/examples/navigation_only.yaml"),
-    "Example: Navigation Only"
-))
-
-# Test old config for comparison
-results.append(test_yaml_file(
-    Path("config/navigation_config.yaml"),
-    "Legacy v1 Config (for comparison)"
+    Path("modules/xprime/config.yaml"),
+    "XPrime Module Config"
 ))
 
 print("\n" + "=" * 60)
 print(f"Results: {sum(results)}/{len(results)} files valid")
 print("=" * 60)
 
-if all(results[:4]):  # First 4 are critical
-    print("\n✓ All required configuration files are valid!")
+if all(results):
+    print("\n✓ All configuration files are valid!")
 else:
     print("\n✗ Some configuration files have errors")
