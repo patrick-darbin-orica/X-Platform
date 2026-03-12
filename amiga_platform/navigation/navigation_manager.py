@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from farm_ng.core.event_service_pb2 import SubscribeRequest
 from farm_ng.core.uri_pb2 import Uri
 from farm_ng.track.track_pb2 import (
+    RobotStatus,
     Track,
     TrackFollowerState,
     TrackFollowRequest,
@@ -49,6 +50,9 @@ class NavigationManager:
 
         # Track active state — prevents double-cancel on shutdown
         self._track_active: bool = False
+
+        # Failure mode tracking
+        self.last_failure_modes: list[str] = []
 
         # Monitoring task
         self.monitor_task: asyncio.Task | None = None
@@ -102,6 +106,21 @@ class NavigationManager:
                         TrackStatusEnum.TRACK_CANCELLED,
                     ]:
                         logger.warning(f"Track failed with status: {TrackStatusEnum.Name(status)}")
+
+                        # Read failure modes from robot status
+                        robot_status = message.status.robot_status
+                        if not robot_status.controllable:
+                            failure_modes = []
+                            for mode in robot_status.failure_modes:
+                                try:
+                                    failure_modes.append(RobotStatus.FailureMode.Name(mode))
+                                except Exception:
+                                    failure_modes.append(f"UNKNOWN({mode})")
+                            self.last_failure_modes = failure_modes
+                            logger.warning(f"Robot not controllable. Failure modes: {failure_modes}")
+                        else:
+                            self.last_failure_modes = []
+
                         self.track_failed.set()
         except asyncio.CancelledError:
             logger.info("State monitoring cancelled")
@@ -118,9 +137,10 @@ class NavigationManager:
         Returns:
             True if track completed successfully, False otherwise
         """
-        # Clear events
+        # Clear events and failure modes
         self.track_complete.clear()
         self.track_failed.clear()
+        self.last_failure_modes = []
 
         # Set track
         async with self._lock:
@@ -172,7 +192,10 @@ class NavigationManager:
         if success:
             logger.info("Track execution completed successfully")
         else:
-            logger.error("Track execution failed")
+            if self.last_failure_modes:
+                logger.error(f"Track execution failed — failure modes: {self.last_failure_modes}")
+            else:
+                logger.error("Track execution failed")
 
         return success
 

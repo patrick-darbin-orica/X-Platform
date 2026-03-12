@@ -294,12 +294,11 @@ class XModuleNavigator:
                 # State: APPROACHING
                 self.state_machine.search_zone_reached()
                 logger.info("Executing approach segment...")
-                success = await self.nav_manager.execute_track(approach_track)
+                success = await self._execute_with_recovery(approach_track, "approach")
 
                 if not success:
-                    logger.error("Approach track failed")
+                    logger.error("Approach track failed after retries")
                     self.state_machine.track_failed()
-                    # TODO: Implement retry logic
                     continue
 
                 # Check for shutdown before starting next track
@@ -355,10 +354,10 @@ class XModuleNavigator:
                     await self.path_planner.get_current_pose(), final_target
                 )
 
-                success = await self.nav_manager.execute_track(final_track)
+                success = await self._execute_with_recovery(final_track, "final approach")
 
                 if not success:
-                    logger.error("Final approach failed")
+                    logger.error("Final approach failed after retries")
                     self.state_machine.track_failed()
                     continue
 
@@ -412,6 +411,69 @@ class XModuleNavigator:
             self.state_machine.abort()
         finally:
             await self.shutdown()
+
+    async def _execute_with_recovery(self, track, label: str) -> bool:
+        """Execute a track with automatic retry on recoverable failures.
+
+        Retries on CANBUS_TIMEOUT (with delay) and FILTER_DIVERGED (with IMU wiggle).
+        Raises RuntimeError on fatal failures (AUTO_MODE_DISABLED) to abort the mission.
+
+        Args:
+            track: Track segment to execute
+            label: Human-readable label for logging (e.g. "approach", "final approach")
+
+        Returns:
+            True if track completed successfully, False on non-fatal failure
+
+        Raises:
+            RuntimeError: On fatal failures that require mission abort
+        """
+        max_retries = self.config.navigation.error_recovery_max_retries
+        can_delay = self.config.navigation.can_recovery_delay_s
+        filter_retries = self.config.navigation.filter_convergence_retries
+
+        canbus_attempts = 0
+        filter_attempts = 0
+
+        for attempt in range(1, max_retries + 2):  # +1 for the initial attempt
+            success = await self.nav_manager.execute_track(track)
+            if success:
+                return True
+
+            failure_modes = self.nav_manager.last_failure_modes
+            logger.warning(f"{label} failed (attempt {attempt}), failure modes: {failure_modes}")
+
+            if "AUTO_MODE_DISABLED" in failure_modes:
+                logger.error("AUTO_MODE_DISABLED — robot auto mode is off, aborting mission")
+                raise RuntimeError("AUTO_MODE_DISABLED")
+
+            elif "CANBUS_TIMEOUT" in failure_modes:
+                canbus_attempts += 1
+                if canbus_attempts > max_retries:
+                    logger.error(f"Max CAN bus retries ({max_retries}) exceeded for {label}")
+                    return False
+                logger.info(f"CANBUS_TIMEOUT — waiting {can_delay}s before retry ({canbus_attempts}/{max_retries})")
+                await asyncio.sleep(can_delay)
+
+            elif "FILTER_DIVERGED" in failure_modes:
+                filter_attempts += 1
+                if filter_attempts > filter_retries:
+                    logger.error(f"Max filter retries ({filter_retries}) exceeded for {label}")
+                    return False
+                logger.info(f"FILTER_DIVERGED — attempting IMU wiggle recovery ({filter_attempts}/{filter_retries})")
+                await imu_wiggle(
+                    self.services.canbus,
+                    self.services.filter,
+                    stop_event=self.shutdown_event if hasattr(self, 'shutdown_event') else None,
+                )
+
+            else:
+                # Unknown or unrecoverable failure
+                if not failure_modes:
+                    logger.error(f"{label} failed with no specific failure mode")
+                return False
+
+        return False
 
     async def _execute_row_end_maneuver(self) -> bool:
         """Execute row-end turn maneuver.
