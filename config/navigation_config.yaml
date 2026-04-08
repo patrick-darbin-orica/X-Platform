@@ -15,7 +15,7 @@ waypoints:
   # Set to the base station (e.g. Emlid RS2+) GPS coordinates.
   # The filter's world frame origin is defined by the base station,
   # so all converted waypoints will align with the filter's pose output.
-  # If omitted, the first CSV row is used as the origin (less reliable).
+  # If omitted, the first CSV row is used as the origin (lessundefined name 'mission'Flake8(F821) reliable).
   # reference_lat: 35.123456   # decimal degrees
   # reference_lon: 33.456789   # decimal degrees
 
