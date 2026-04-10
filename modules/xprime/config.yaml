@@ -21,3 +21,11 @@ config:
   alignment:
     tolerance_m: 0.02                # Alignment tolerance
     check_timeout_s: 10.0            # Timeout for alignment checks
+
+  # Encoding Bridge Configuration (Windows device)
+  bridge:
+    # host: "10.95.76.24"             # Windows device IP (static, direct Ethernet)
+    host: "172.16.3.248"            # Windows device IP for wifi
+    port: 8765                       # TCP port for bridge server
+    com_port: "COM8"                # Encoder serial port on Windows device
+    blast_file: ""                   # Full Windows path to .lgf blast file e.g. C:\\blasts\\myblast.lgf
