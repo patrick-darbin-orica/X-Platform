@@ -282,7 +282,7 @@ def _cli():
     parser = argparse.ArgumentParser(
         description="Amiga bridge client — send commands to the Windows encoding bridge."
     )
-    parser.add_argument("--host", default="10.95.76.24", help="Bridge host IP")
+    parser.add_argument("--host", default="172.16.3.248", help="Bridge host IP")
     parser.add_argument("--port", type=int, default=8765, help="Bridge TCP port")
     parser.add_argument(
         "--command",

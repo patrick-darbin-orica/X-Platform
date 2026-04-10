@@ -33,7 +33,7 @@ waypoints:
 module: xprime
 
 vision:
-  enabled: true
+  enabled: false
   mode: "stop_to_detect"
   search_radius_m: 1.0
   detection_timeout_s: 10.0

@@ -1,9 +1,11 @@
 """XPrime priming module."""
 from __future__ import annotations
 
+import asyncio
 import logging
 import sys
 import os
+from pathlib import Path
 from typing import Optional, TYPE_CHECKING
 
 from modules.base_module import BaseModule, ModuleContext, ModuleResult
@@ -17,6 +19,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "encoder"))
 from amiga_bridge_client import AmigaBridgeClient  # noqa: E402
 
 logger = logging.getLogger(__name__)
+
+# Flag file used for operator confirmation via Flask UI
+_CONFIRM_FLAG = Path("/tmp/xprime_drx_ready")
+_WAITING_FLAG = Path("/tmp/xprime_waiting_for_operator")
 
 
 class PrimingModule(BaseModule):
@@ -55,7 +61,7 @@ class PrimingModule(BaseModule):
         self.vision = context.vision_system
         self.config = context.module_config
 
-        bridge_cfg = self.config.get("config", {}).get("bridge", {})
+        bridge_cfg = self.config.get("bridge", {})
         self._bridge_host = bridge_cfg.get("host", self._bridge_host)
         self._bridge_port = bridge_cfg.get("port", self._bridge_port)
         self._com_port = bridge_cfg.get("com_port", self._com_port)
@@ -157,6 +163,18 @@ class PrimingModule(BaseModule):
                     return ModuleResult(success=False, error=f"Empty primerUID for hole {hole_name} index {drx_index}", hole_completed=False)
 
                 logger.info(f"Encoding: hole={hole_name} drxIndex={drx_index} primerUID={primer_uid}")
+
+                # Wait for operator to confirm DRX is loaded in encoder tube
+                _CONFIRM_FLAG.unlink(missing_ok=True)
+                _WAITING_FLAG.touch()
+                logger.info("Waiting for operator confirmation via web UI...")
+                try:
+                    while not _CONFIRM_FLAG.exists():
+                        await asyncio.sleep(0.5)
+                finally:
+                    _WAITING_FLAG.unlink(missing_ok=True)
+                    _CONFIRM_FLAG.unlink(missing_ok=True)
+                logger.info("Operator confirmed — starting encode")
 
                 result = client.encode_drx(
                     hole_name=hole_name,
