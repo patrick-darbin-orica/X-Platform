@@ -38,7 +38,9 @@ from typing import Any, Dict, Optional
 class AmigaBridgeClient:
     """Synchronous TCP client for the amiga-bridge service."""
 
-    def __init__(self, host: str = "192.168.1.100", port: int = 8765, timeout: float = 65.0):
+    def __init__(
+        self, host: str = "192.168.1.100", port: int = 8765, timeout: float = 65.0
+    ):
         self.host = host
         self.port = port
         self.timeout = timeout
@@ -99,7 +101,11 @@ class AmigaBridgeClient:
     def _require_ok(self, resp: Dict) -> Dict:
         if not resp.get("ok"):
             error = resp.get("error", "UNKNOWN_ERROR")
-            extra = {k: v for k, v in resp.items() if k not in ("ok", "error", "correlationId")}
+            extra = {
+                k: v
+                for k, v in resp.items()
+                if k not in ("ok", "error", "correlationId")
+            }
             raise RuntimeError(f"Bridge error: {error} {extra}")
         return resp
 
@@ -109,7 +115,9 @@ class AmigaBridgeClient:
 
     def get_state(self) -> Dict:
         """Return the wg-backend state dict."""
-        return _expand_json_strings(self._require_ok(self._send("GET_STATE"))["payload"])
+        return _expand_json_strings(
+            self._require_ok(self._send("GET_STATE"))["payload"]
+        )
 
     def set_com_port(self, port: str = "COM10") -> bool:
         """Register the encoder serial port. Call once per session."""
@@ -165,7 +173,9 @@ class AmigaBridgeClient:
             "holeRing": hole_ring,
             "gpsInfo": {"lat": lat, "long": long_, "hmsl": hmsl},
         }
-        return _expand_json_strings(self._require_ok(self._send("DECODE_DRX", params))["payload"])
+        return _expand_json_strings(
+            self._require_ok(self._send("DECODE_DRX", params))["payload"]
+        )
 
     def get_encoding_blast(self) -> Dict:
         """Return the full blast data with primer encoding statuses."""
@@ -174,7 +184,9 @@ class AmigaBridgeClient:
 
     def export_blast(self) -> Dict:
         """Finalise and export the fully-encoded blast."""
-        return _expand_json_strings(self._require_ok(self._send("EXPORT_BLAST"))["payload"])
+        return _expand_json_strings(
+            self._require_ok(self._send("EXPORT_BLAST"))["payload"]
+        )
 
     def revert_blast_state(self) -> bool:
         """Revert the blast back to ready-to-encode state."""
@@ -244,6 +256,7 @@ class AmigaBridgeClient:
 # CLI helpers
 # ---------------------------------------------------------------------------
 
+
 def _expand_json_strings(obj):
     """Recursively parse any string values that contain embedded JSON."""
     if isinstance(obj, dict):
@@ -252,7 +265,7 @@ def _expand_json_strings(obj):
         return [_expand_json_strings(i) for i in obj]
     if isinstance(obj, str):
         stripped = obj.strip()
-        if stripped and stripped[0] in ('{', '['):
+        if stripped and stripped[0] in ("{", "["):
             try:
                 return _expand_json_strings(json.loads(stripped))
             except json.JSONDecodeError:
@@ -264,23 +277,33 @@ def _expand_json_strings(obj):
 # CLI entry point
 # ---------------------------------------------------------------------------
 
+
 def _cli():
     parser = argparse.ArgumentParser(
         description="Amiga bridge client — send commands to the Windows encoding bridge."
     )
-    parser.add_argument("--host", default="192.168.1.100", help="Bridge host IP")
+    parser.add_argument("--host", default="10.95.76.24", help="Bridge host IP")
     parser.add_argument("--port", type=int, default=8765, help="Bridge TCP port")
     parser.add_argument(
-        "--command", required=True,
+        "--command",
+        required=True,
         choices=[
-            "GET_STATE", "SET_COM_PORT", "IMPORT_BLAST", "ENCODE_DRX",
-            "DECODE_DRX", "GET_ENCODING_BLAST", "REVERT_BLAST_STATE",
-            "EXPORT_BLAST", "RESET_DATABASE", "GET_SYSTEM_UID",
+            "GET_STATE",
+            "SET_COM_PORT",
+            "IMPORT_BLAST",
+            "ENCODE_DRX",
+            "DECODE_DRX",
+            "GET_ENCODING_BLAST",
+            "REVERT_BLAST_STATE",
+            "EXPORT_BLAST",
+            "RESET_DATABASE",
+            "GET_SYSTEM_UID",
         ],
     )
     parser.add_argument(
-        "--params", default=None,
-        help="JSON string of command parameters, e.g. '{\"port\":\"COM10\"}'",
+        "--params",
+        default=None,
+        help='JSON string of command parameters, e.g. \'{"port":"COM10"}\'',
     )
     parser.add_argument("--timeout", type=float, default=65.0)
     args = parser.parse_args()
