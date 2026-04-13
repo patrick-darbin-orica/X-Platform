@@ -114,7 +114,6 @@ function updateRobotStatus(status) {
         if (status.xprime_waiting && !xprimeWaiting) {
             xprimeWaiting = true;
             btnConfirm.disabled = false;
-            addLog('Robot waiting — place DRX in encoder tube then confirm', 'warning');
         } else if (!status.xprime_waiting && xprimeWaiting) {
             xprimeWaiting = false;
             btnConfirm.disabled = true;

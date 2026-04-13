@@ -63,7 +63,7 @@ header h1 {
 .main-grid {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr 1fr;
-    grid-template-rows: 1fr 1fr;
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
     gap: 20px;
     min-height: 80vh;
 }
@@ -71,6 +71,8 @@ header h1 {
 /* Control panel spans 2 rows */
 .control-panel {
     grid-row: span 2;
+    overflow: hidden;
+    min-height: 0;
 }
 
 .panel {
@@ -239,7 +241,6 @@ header h1 {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    overflow: hidden;
 }
 
 .btn {
