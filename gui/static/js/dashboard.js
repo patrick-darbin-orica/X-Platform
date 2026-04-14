@@ -111,20 +111,17 @@ function updateRobotStatus(status) {
     if (status.navigation_running) {
         btnStart.disabled = true;
         btnStop.disabled = false;
-        if (status.xprime_waiting && !xprimeWaiting) {
-            xprimeWaiting = true;
-            btnConfirm.disabled = false;
-        } else if (!status.xprime_waiting && xprimeWaiting) {
-            xprimeWaiting = false;
-            btnConfirm.disabled = true;
-        }
     } else {
         btnStart.disabled = false;
         btnStop.disabled = true;
-        if (xprimeWaiting) {
-            xprimeWaiting = false;
-            btnConfirm.disabled = true;
-        }
+    }
+
+    if (status.xprime_waiting && !xprimeWaiting) {
+        xprimeWaiting = true;
+        btnConfirm.disabled = false;
+    } else if (!status.xprime_waiting && xprimeWaiting) {
+        xprimeWaiting = false;
+        btnConfirm.disabled = true;
     }
 }
 
