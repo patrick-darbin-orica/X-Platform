@@ -307,6 +307,14 @@ def handle_emergency_stop():
     print("EMERGENCY STOP")
 
 
+@socketio.on('confirm_drx_ready')
+def handle_confirm_drx_ready():
+    """Operator confirms DRX is loaded in encoder tube — unblocks xprime module."""
+    flag = Path('/tmp/xprime_drx_ready')
+    flag.touch()
+    emit('success', {'message': 'DRX confirmed — encoding started'})
+
+
 # ==================== Helper Functions ====================
 
 def load_waypoint_data():
@@ -414,6 +422,7 @@ def background_status_updater():
                     'heading_deg': math.degrees(pose.yaw)
                 }
 
+            status['xprime_waiting'] = Path('/tmp/xprime_waiting_for_operator').exists()
             socketio.emit('status_update', status)
 
         except Exception as e:

@@ -42,6 +42,8 @@ socket.on('nav_log', (data) => {
     addLog('[NAV] ' + data.message, 'info');
 });
 
+let xprimeWaiting = false;
+
 // ==================== UI Update Functions ====================
 
 function updateConnectionStatus(connected) {
@@ -105,12 +107,21 @@ function updateRobotStatus(status) {
     const btnStart = document.getElementById('btn-start');
     const btnStop = document.getElementById('btn-stop');
 
+    const btnConfirm = document.getElementById('btn-confirm-drx');
     if (status.navigation_running) {
         btnStart.disabled = true;
         btnStop.disabled = false;
     } else {
         btnStart.disabled = false;
         btnStop.disabled = true;
+    }
+
+    if (status.xprime_waiting && !xprimeWaiting) {
+        xprimeWaiting = true;
+        btnConfirm.disabled = false;
+    } else if (!status.xprime_waiting && xprimeWaiting) {
+        xprimeWaiting = false;
+        btnConfirm.disabled = true;
     }
 }
 
@@ -141,6 +152,13 @@ function startNavigation() {
 function stopNavigation() {
     socket.emit('stop_navigation');
     addLog('Sending stop command...', 'info');
+}
+
+function confirmDrxReady() {
+    socket.emit('confirm_drx_ready');
+    document.getElementById('btn-confirm-drx').disabled = true;
+    xprimeWaiting = false;
+    addLog('DRX confirmed — encoding in progress...', 'info');
 }
 
 function emergencyStop() {
