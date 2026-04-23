@@ -60,9 +60,25 @@ def main():
             state = client.get_state()
         print(f"    PASS — bridge reachable")
         print(f"    State: {json.dumps(state, indent=6)}")
+        blast_present = (
+            state.get("loadedEncodingBlastPresent", False)
+            or bool(state.get("loadedBlastFileName", ""))
+            or state.get("loadedBlastStatus", "") == "ENCODING"
+        )
+        if not blast_present:
+            print("    WARN — no blast file loaded in Windows program")
+            print("           Load a blast file before encoding primers")
+            passed = False
+        else:
+            blast_name = state.get("loadedBlastFileName", "")
+            blast_status = state.get("loadedBlastStatus", "")
+            print(f"    PASS — blast loaded: '{blast_name}' (status: {blast_status})")
     except Exception as e:
         print(f"    FAIL — {e}")
-        passed = False
+        print(f"\n{'='*40}")
+        print("RESULT: FAIL — bridge unreachable, cannot continue")
+        print('='*40)
+        sys.exit(1)
 
     # ---- 2. Blast file path set ----
     print(f"\n[2] Checking blast file path...")
@@ -78,7 +94,12 @@ def main():
     try:
         with AmigaBridgeClient(host=args.host, port=args.port) as client:
             blast_data = client.get_encoding_blast()
-        print("    PASS — blast data received")
+        if blast_data is None:
+            print("    FAIL — blast data payload is null (blast not imported into encoding database)")
+            print("           Run: IMPORT_BLAST with the Windows path to the .lgf file")
+            passed = False
+        else:
+            print("    PASS — blast data received")
     except Exception as e:
         print(f"    FAIL — {e}")
         passed = False

@@ -3,16 +3,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import sys
 import os
+import sys
 from pathlib import Path
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from modules.base_module import BaseModule, ModuleContext, ModuleResult
 
 if TYPE_CHECKING:
-    from farm_ng.core.event_client import EventClient
     from amiga_platform.vision.vision_system import VisionSystem
+    from farm_ng.core.event_client import EventClient
 
 # Make encoder submodule importable
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "encoder"))
@@ -23,6 +23,11 @@ logger = logging.getLogger(__name__)
 # Flag file used for operator confirmation via Flask UI
 _CONFIRM_FLAG = Path("/tmp/xprime_drx_ready")
 _WAITING_FLAG = Path("/tmp/xprime_waiting_for_operator")
+
+# Retry config for NFC "no primer on antenna" error
+_NFC_NO_PRIMER_MSG = "Invalid Reply from NFC Encoder"
+_NFC_RETRY_DELAY_S = 10.0
+_NFC_MAX_RETRIES = 2
 
 
 class PrimingModule(BaseModule):
@@ -176,12 +181,28 @@ class PrimingModule(BaseModule):
                     _CONFIRM_FLAG.unlink(missing_ok=True)
                 logger.info("Operator confirmed — starting encode")
 
-                result = client.encode_drx(
-                    hole_name=hole_name,
-                    drx_index=drx_index,
-                    primer_uid=primer_uid,
-                    hole_ring=hole_ring,
-                )
+                result = None
+                for _attempt in range(1, _NFC_MAX_RETRIES + 1):
+                    result = client.encode_drx(
+                        hole_name=hole_name,
+                        drx_index=drx_index,
+                        primer_uid=primer_uid,
+                        hole_ring=hole_ring,
+                    )
+                    _err_msg = result.get("errorMessage", "")
+                    if not result.get("isSuccess") and _NFC_NO_PRIMER_MSG in _err_msg:
+                        if _attempt < _NFC_MAX_RETRIES:
+                            logger.warning(
+                                "No primer on antenna (attempt %d/%d) — waiting %.0fs for arm adjustment...",
+                                _attempt, _NFC_MAX_RETRIES, _NFC_RETRY_DELAY_S,
+                            )
+                            await asyncio.sleep(_NFC_RETRY_DELAY_S)
+                            continue
+                        logger.error(
+                            "No primer on antenna after %d attempts: hole=%s drxIndex=%d",
+                            _NFC_MAX_RETRIES, hole_name, drx_index,
+                        )
+                    break
 
             # --- Payload-level result handling (testResult from PrimerTestResult enum) ---
             test_result = result.get("testResult", "")
@@ -234,7 +255,7 @@ class PrimingModule(BaseModule):
                     # TODO: handle NotTested — encode attempted but test did not run; determine if safe to proceed
                     return ModuleResult(success=False, error=f"Detonator not tested at hole {hole_name}", hole_completed=False)
                 else:
-                    error = result.get("error", f"Unknown encode failure (testResult='{test_result}')")
+                    error = result.get("errorMessage") or result.get("error") or f"Unknown encode failure (testResult='{test_result}')"
                     logger.error(f"Encode failed: {error}")
                     # TODO: handle any unrecognised failure — log full result payload for diagnosis
                     return ModuleResult(success=False, error=error, hole_completed=False)

@@ -23,8 +23,13 @@ Arguments:
 import argparse
 import json
 import sys
+import time
 
 from amiga_bridge_client import AmigaBridgeClient
+
+_NFC_NO_PRIMER_MSG = "Invalid Reply from NFC Encoder"
+_NFC_RETRY_DELAY_S = 10.0
+_NFC_MAX_RETRIES = 3
 
 # ---------------------------------------------------------------------------
 # Blast data search
@@ -157,15 +162,25 @@ def main():
             print("\n[DRY RUN] — no encoding performed.")
         else:
             print("\nEncoding — waiting for hardware response (up to 60s)...")
-            result = client.encode_drx(
-                hole_name=hole_name,
-                drx_index=drx_index,
-                primer_uid=primer_uid,
-                hole_ring=hole_ring,
-                lat=args.lat,
-                long_=args.long,
-                hmsl=args.hmsl,
-            )
+            result = None
+            for attempt in range(1, _NFC_MAX_RETRIES + 1):
+                result = client.encode_drx(
+                    hole_name=hole_name,
+                    drx_index=drx_index,
+                    primer_uid=primer_uid,
+                    hole_ring=hole_ring,
+                    lat=args.lat,
+                    long_=args.long,
+                    hmsl=args.hmsl,
+                )
+                err_msg = result.get("errorMessage", "")
+                if not result.get("isSuccess") and _NFC_NO_PRIMER_MSG in err_msg:
+                    if attempt < _NFC_MAX_RETRIES:
+                        print(f"No primer on antenna (attempt {attempt}/{_NFC_MAX_RETRIES}) — waiting {_NFC_RETRY_DELAY_S:.0f}s before retry...")
+                        time.sleep(_NFC_RETRY_DELAY_S)
+                        continue
+                    print(f"No primer on antenna after {_NFC_MAX_RETRIES} attempts.")
+                break
 
             if result.get("isSuccess"):
                 print("SUCCESS — primer encoded.")
