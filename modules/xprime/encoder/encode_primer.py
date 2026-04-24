@@ -186,8 +186,10 @@ def main():
                 print("SUCCESS — primer encoded.")
                 print(json.dumps(result, indent=2))
             else:
+                err_msg = result.get("errorMessage", "")
                 print("FAILED:")
                 print(json.dumps(result, indent=2))
+                # TODO: if err_msg == "Error code: Detonator test failed: Undefined" → call REJECT_PRIMER
                 sys.exit(1)
 
         # Verify primer status in blast (runs for both dry-run and live)
