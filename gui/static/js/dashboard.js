@@ -144,6 +144,14 @@ function stopNavigation() {
     addLog('Sending stop command...', 'info');
 }
 
+function startArm() {
+    const btn = document.getElementById('btn-start-arm');
+    btn.disabled = true;
+    socket.emit('run_arm');
+    addLog('Sending arm start command...', 'info');
+    socket.once('arm_done', () => { btn.disabled = false; });
+}
+
 function encodeNextPrimer() {
     const btn = document.getElementById('btn-confirm-drx');
     btn.disabled = true;

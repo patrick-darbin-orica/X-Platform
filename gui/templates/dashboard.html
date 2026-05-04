@@ -86,15 +86,20 @@
                     <button id="btn-confirm-drx" class="btn btn-primary" onclick="encodeNextPrimer()">
                         Encode
                     </button>
+                    <button id="btn-start-arm" class="btn btn-primary" onclick="startArm()">
+                        Start Arm
+                    </button>
                 </div>
             </div>
 
-            <!-- Column 2 Row 2: Reserved -->
-            <div class="panel">
-                <h2>Reserved</h2>
+            <!-- Column 1 Row 2: E-Stop -->
+            <div class="panel estop-panel">
+                <button id="btn-estop" class="btn btn-estop-large">
+                    E-STOP
+                </button>
             </div>
 
-            <!-- Column 3 Row 2: System Log -->
+            <!-- Column 2 Row 2: System Log -->
             <div class="panel sys-log-panel">
                 <h2>System Log</h2>
                 <div id="log-container" class="log-container"></div>

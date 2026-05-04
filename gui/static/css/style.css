@@ -13,7 +13,7 @@ body {
     font-family: 'Frutiger LT Std 45 Light', 'Frutiger', 'Segoe UI', sans-serif;
     background: #ffffff;
     color: #333333;
-    overflow-x: hidden;
+    overflow: hidden;
 }
 
 .container {
@@ -63,9 +63,9 @@ header h1 {
 .main-grid {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr 1fr;
-    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: 1fr 200px;
     gap: 20px;
-    min-height: 80vh;
+    height: calc(100vh - 120px);
 }
 
 /* Control panel spans 2 rows */
@@ -73,6 +73,14 @@ header h1 {
     grid-row: span 2;
     overflow: hidden;
     min-height: 0;
+}
+
+.estop-panel {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #1a0000;
+    border: 3px solid #dc2626;
 }
 
 /* Prevent grid items from expanding beyond their allocated row */
@@ -307,6 +315,34 @@ header h1 {
 
 .btn-danger:hover {
     background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+}
+
+
+.btn-estop-large {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-family: 'Nexa Black', 'Nexa', sans-serif;
+    font-size: 42px;
+    font-weight: 900;
+    letter-spacing: 4px;
+    cursor: pointer;
+    box-shadow: 0 0 30px rgba(220, 38, 38, 0.5);
+    transition: all 0.15s ease;
+}
+
+.btn-estop-large:hover {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    box-shadow: 0 0 50px rgba(220, 38, 38, 0.8);
+    transform: scale(1.02);
+}
+
+.btn-estop-large:active {
+    transform: scale(0.98);
+    box-shadow: 0 0 20px rgba(220, 38, 38, 0.6);
 }
 
 /* Log Container */

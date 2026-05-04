@@ -344,6 +344,42 @@ def handle_run_encode():
     threading.Thread(target=run, daemon=True).start()
 
 
+@socketio.on('run_arm')
+def handle_run_arm():
+    """Run start_arm.py and stream output to the log."""
+    script = REPO_ROOT / 'modules' / 'arm' / 'start_arm.py'
+    sid = request.sid
+
+    def run():
+        try:
+            proc = subprocess.Popen(
+                [sys.executable, str(script)],
+                cwd=str(REPO_ROOT),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                bufsize=1,
+                universal_newlines=True,
+            )
+            success = False
+            for line in iter(proc.stdout.readline, ''):
+                line = line.rstrip()
+                if line:
+                    socketio.emit('nav_log', {'message': line})
+                    if 'SUCCESS' in line:
+                        success = True
+            proc.wait()
+            if proc.returncode == 0 and success:
+                socketio.emit('success', {'message': 'Arm started'}, to=sid)
+            else:
+                socketio.emit('error', {'message': 'Arm start failed'}, to=sid)
+        except Exception as e:
+            socketio.emit('error', {'message': f'Arm error: {e}'}, to=sid)
+        finally:
+            socketio.emit('arm_done', {}, to=sid)
+
+    threading.Thread(target=run, daemon=True).start()
+
+
 # ==================== Helper Functions ====================
 
 def load_waypoint_data():
