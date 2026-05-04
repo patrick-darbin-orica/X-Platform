@@ -30,23 +30,12 @@
                 </div>
             </div>
 
-            <!-- Column 2 Row 1: Camera Feed 1 -->
-            <div class="panel camera-panel">
-                <h2>Camera Feed 1 (OAK-2)</h2>
+            <!-- Columns 2-3 Row 1: Camera Feed -->
+            <div class="panel camera-panel camera-panel-wide">
+                <h2>Camera Feed (OAK-D W)</h2>
                 <div class="video-container">
                     <img id="camera-feed" src="{{ url_for('video_feed') }}" alt="Camera Feed">
                     <div id="camera-overlay">
-                        <div class="camera-info">Waiting for camera...</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Column 3 Row 1: Camera Feed 2 -->
-            <div class="panel camera-panel">
-                <h2>Camera Feed 2</h2>
-                <div class="video-container">
-                    <img id="camera-feed-2" src="{{ url_for('video_feed_2') }}" alt="Camera Feed 2">
-                    <div id="camera-overlay-2">
                         <div class="camera-info">Waiting for camera...</div>
                     </div>
                 </div>
@@ -94,7 +83,7 @@
                     <button id="btn-stop" class="btn btn-warning" onclick="stopNavigation()" disabled>
                         Stop Navigation
                     </button>
-                    <button id="btn-confirm-drx" class="btn btn-primary" onclick="confirmDrxReady()" disabled>
+                    <button id="btn-confirm-drx" class="btn btn-primary" onclick="encodeNextPrimer()">
                         Encode
                     </button>
                 </div>

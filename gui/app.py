@@ -15,7 +15,6 @@ import threading
 import subprocess
 import signal
 import time
-import asyncio
 from typing import Optional
 
 # Add repo root to path for utils imports
@@ -26,11 +25,6 @@ from utils.pose_cache import get_latest_pose, set_latest_pose
 from utils.navigation_state import get_navigation_state, get_waypoint_status
 from utils.camera_frame_cache import get_latest_frame_bytes
 
-# Import filter client dependencies
-from farm_ng.core.event_client import EventClient
-from farm_ng.core.event_service_pb2 import EventServiceConfig, EventServiceConfigList
-from farm_ng.core.events_file_reader import proto_from_json_file
-from farm_ng_core_pybind import Pose3F64
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'x-platform-secret'
@@ -307,12 +301,47 @@ def handle_emergency_stop():
     print("EMERGENCY STOP")
 
 
-@socketio.on('confirm_drx_ready')
-def handle_confirm_drx_ready():
-    """Operator confirms DRX is loaded in encoder tube — unblocks xprime module."""
-    flag = Path('/tmp/xprime_drx_ready')
-    flag.touch()
-    emit('success', {'message': 'DRX confirmed — encoding started'})
+@socketio.on('run_encode')
+def handle_run_encode():
+    """Run encode_next_primer.py and stream output to the log."""
+    encoder_dir = REPO_ROOT / 'modules' / 'xprime' / 'encoder'
+    script = encoder_dir / 'encode_next_primer.py'
+    sid = request.sid
+
+    def run():
+        try:
+            proc = subprocess.Popen(
+                [sys.executable, str(script)],
+                cwd=str(encoder_dir),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                bufsize=1,
+                universal_newlines=True,
+            )
+            hole_info = None
+            success = False
+            for line in iter(proc.stdout.readline, ''):
+                line = line.rstrip()
+                if not line or line.lstrip().startswith(('{', '[')):
+                    continue
+                if line.startswith('Hole:'):
+                    hole_info = line.split('(')[0].strip()
+                elif 'SUCCESS' in line:
+                    success = True
+            proc.wait()
+            parts = [hole_info] if hole_info else []
+            if proc.returncode == 0 and success:
+                parts.append('SUCCESS')
+                socketio.emit('success', {'message': ' — '.join(parts)}, to=sid)
+            else:
+                parts.append('FAILED')
+                socketio.emit('error', {'message': ' — '.join(parts)}, to=sid)
+        except Exception as e:
+            socketio.emit('error', {'message': f'Encode error: {e}'}, to=sid)
+        finally:
+            socketio.emit('encode_done', {}, to=sid)
+
+    threading.Thread(target=run, daemon=True).start()
 
 
 # ==================== Helper Functions ====================
@@ -347,46 +376,6 @@ def load_waypoint_data():
 
     return waypoints
 
-
-async def filter_pose_updater():
-    """Subscribe to filter state and continuously update pose cache."""
-    try:
-        config_path = REPO_ROOT / 'config' / 'service_config.json'
-        config_list = proto_from_json_file(config_path, EventServiceConfigList())
-
-        filter_config = None
-        for config in config_list.configs:
-            if config.name == "filter":
-                filter_config = config
-                break
-
-        if filter_config is None:
-            print("Filter service not found in config, pose updates disabled")
-            return
-
-        from farm_ng.core.event_service_pb2 import SubscribeRequest
-        from farm_ng.core.uri_pb2 import Uri
-
-        subscription = SubscribeRequest(
-            uri=Uri(path="/state", query="service_name=filter"),
-            every_n=1
-        )
-
-        client = EventClient(filter_config)
-        print(f"Subscribed to filter service at {filter_config.host}:{filter_config.port}")
-
-        async for event, message in client.subscribe(subscription, decode=True):
-            pose = Pose3F64.from_proto(message.pose)
-            x = float(pose.a_from_b.translation[0])
-            y = float(pose.a_from_b.translation[1])
-            yaw = float(pose.a_from_b.rotation.log()[-1])
-            converged = bool(getattr(message, "has_converged", False))
-            set_latest_pose(x, y, yaw, converged)
-
-    except Exception as e:
-        print(f"Filter pose updater error: {e}")
-        import traceback
-        traceback.print_exc()
 
 
 def background_status_updater():
@@ -433,29 +422,7 @@ def background_status_updater():
 
 # ==================== Main ====================
 
-def run_async_filter_updater():
-    """Run the async filter updater in its own event loop."""
-    try:
-        if sys.platform != 'win32':
-            import selectors
-            selector = selectors.SelectSelector()
-            loop = asyncio.SelectorEventLoop(selector)
-        else:
-            loop = asyncio.new_event_loop()
-
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(filter_pose_updater())
-    except Exception as e:
-        print(f"Filter updater thread error: {e}")
-        import traceback
-        traceback.print_exc()
-
-
 if __name__ == '__main__':
-    # Start background filter pose updater
-    filter_thread = threading.Thread(target=run_async_filter_updater, daemon=True)
-    filter_thread.start()
-
     # Start background status updater
     status_thread = threading.Thread(target=background_status_updater, daemon=True)
     status_thread.start()

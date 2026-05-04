@@ -42,7 +42,6 @@ socket.on('nav_log', (data) => {
     addLog('[NAV] ' + data.message, 'info');
 });
 
-let xprimeWaiting = false;
 
 // ==================== UI Update Functions ====================
 
@@ -107,21 +106,12 @@ function updateRobotStatus(status) {
     const btnStart = document.getElementById('btn-start');
     const btnStop = document.getElementById('btn-stop');
 
-    const btnConfirm = document.getElementById('btn-confirm-drx');
     if (status.navigation_running) {
         btnStart.disabled = true;
         btnStop.disabled = false;
     } else {
         btnStart.disabled = false;
         btnStop.disabled = true;
-    }
-
-    if (status.xprime_waiting && !xprimeWaiting) {
-        xprimeWaiting = true;
-        btnConfirm.disabled = false;
-    } else if (!status.xprime_waiting && xprimeWaiting) {
-        xprimeWaiting = false;
-        btnConfirm.disabled = true;
     }
 }
 
@@ -154,11 +144,12 @@ function stopNavigation() {
     addLog('Sending stop command...', 'info');
 }
 
-function confirmDrxReady() {
-    socket.emit('confirm_drx_ready');
-    document.getElementById('btn-confirm-drx').disabled = true;
-    xprimeWaiting = false;
-    addLog('DRX confirmed — encoding in progress...', 'info');
+function encodeNextPrimer() {
+    const btn = document.getElementById('btn-confirm-drx');
+    btn.disabled = true;
+    socket.emit('run_encode');
+    addLog('Encoding next primer...', 'info');
+    socket.once('encode_done', () => { btn.disabled = false; });
 }
 
 function emergencyStop() {
@@ -341,16 +332,12 @@ function initializeCameraFeed() {
     const cameraOverlay = document.getElementById('camera-overlay');
 
     cameraFeed.addEventListener('load', () => {
-        if (cameraOverlay) {
-            cameraOverlay.style.display = 'none';
-        }
+        cameraOverlay.style.display = 'none';
     });
 
     cameraFeed.addEventListener('error', () => {
-        if (cameraOverlay) {
-            cameraOverlay.style.display = 'block';
-            cameraOverlay.innerHTML = '<div class="camera-info">Camera feed unavailable</div>';
-        }
+        cameraOverlay.style.display = 'block';
+        cameraOverlay.innerHTML = '<div class="camera-info">Camera feed unavailable</div>';
     });
 }
 
